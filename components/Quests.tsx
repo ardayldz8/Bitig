@@ -5,6 +5,13 @@ import type { Entry, Quest, QuestSpec } from "@/lib/types";
 import { itemToEntry, dayKey, uid } from "@/lib/store";
 import { insertEntries, deleteEntry } from "@/lib/db";
 
+// AI yavaş/erişilemezse asla boş kalmasın diye yerel yedek questler
+const LOCAL_FALLBACK: QuestSpec[] = [
+  { text: "📖 10 sayfa kitap oku", stat: "INT", item: { kind: "habit", name: "okuma", amount: 10, unit: "sayfa", done: true } },
+  { text: "🏃 20 dk yürüyüş yap", stat: "STR", item: { kind: "habit", name: "yürüyüş", amount: 20, unit: "dk", done: true } },
+  { text: "💧 2 litre su iç", stat: "VIT", item: { kind: "habit", name: "su", amount: 2, unit: "litre", done: true } },
+];
+
 export default function Quests({
   userId,
   entries,
@@ -42,18 +49,24 @@ export default function Quests({
 
   async function generate() {
     setLoading(true);
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 15000); // 15 sn sonra yerel yedeğe düş
     try {
       const res = await fetch("/api/quests", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ entries: entries.slice(0, 80), today: dayKey() }),
+        signal: ctrl.signal,
       });
       const data = await res.json();
-      const specs: QuestSpec[] = Array.isArray(data.quests) ? data.quests : [];
+      const specs: QuestSpec[] =
+        Array.isArray(data.quests) && data.quests.length ? data.quests : LOCAL_FALLBACK;
       save(specs.map((s) => ({ ...s, id: uid(), done: false })));
     } catch {
-      setQuests([]);
+      // zaman aşımı / ağ hatası -> asla boş bırakma
+      save(LOCAL_FALLBACK.map((s) => ({ ...s, id: uid(), done: false })));
     } finally {
+      clearTimeout(timer);
       setLoading(false);
     }
   }

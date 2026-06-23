@@ -38,6 +38,8 @@ async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
         { role: "user", content: opts.user },
       ],
       temperature: opts.temperature ?? 0.4,
+      // gpt-5 reasoning modellerini hızlandırır (70s -> ~2s); reasoning olmayan modeller yok sayar
+      reasoning: { effort: "minimal" },
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
