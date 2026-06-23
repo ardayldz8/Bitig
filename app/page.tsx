@@ -66,6 +66,7 @@ export default function Home() {
   const [editing, setEditing] = useState<Entry | null>(null);
   const [dungeons, setDungeons] = useState<Dungeon[]>([]);
   const [dungeonCleared, setDungeonCleared] = useState<{ name: string; rank: string } | null>(null);
+  const [pw, setPw] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -256,6 +257,19 @@ export default function Home() {
   async function signOut() {
     await supabase.auth.signOut();
     setSheetOpen(false);
+  }
+
+  async function changePassword() {
+    if (pw.length < 6) {
+      flash("Şifre en az 6 karakter olmalı");
+      return;
+    }
+    const { error } = await supabase.auth.updateUser({ password: pw });
+    if (error) flash("Olmadı: " + error.message);
+    else {
+      setPw("");
+      flash("Şifre belirlendi ✓ Artık şifreyle girebilirsin");
+    }
   }
 
   async function toggleNotif() {
@@ -584,6 +598,30 @@ export default function Home() {
               >
                 {notifBusy ? "…" : notifOn ? "Kapat" : "Aç"}
               </button>
+            </div>
+
+            <div className="mt-4 border-t border-[var(--border)] pt-4">
+              <p className="mb-2 text-sm font-medium">🔑 Şifre belirle / değiştir</p>
+              <div className="flex gap-2">
+                <input
+                  type="password"
+                  value={pw}
+                  onChange={(e) => setPw(e.target.value)}
+                  placeholder="Yeni şifre (min 6)"
+                  autoComplete="new-password"
+                  className="flex-1 rounded-xl border border-[var(--border)] bg-[var(--background)] px-3 py-2 text-sm outline-none focus:border-indigo-400"
+                />
+                <button
+                  onClick={changePassword}
+                  disabled={pw.length < 6}
+                  className="shrink-0 rounded-xl bg-indigo-500 px-3 py-2 text-sm font-medium text-white disabled:opacity-40"
+                >
+                  Kaydet
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-[var(--muted)]">
+                Şifre koyunca telefonda e-posta + şifreyle (bağlantı beklemeden) girersin.
+              </p>
             </div>
 
             <div className="mt-4 flex items-center justify-between border-t border-[var(--border)] pt-4">
