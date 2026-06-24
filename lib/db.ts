@@ -113,6 +113,21 @@ export async function deleteEntry(id: string): Promise<void> {
   if (error) throw error;
 }
 
+/** Bir yemek kaydının yalnızca besin değerlerini günceller (web araştırması sonrası). */
+export async function updateFoodNutrition(
+  id: string,
+  n: { kcal?: number; protein?: number; carb?: number; fat?: number }
+): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (n.kcal != null) row.kcal = n.kcal;
+  if (n.protein != null) row.protein = n.protein;
+  if (n.carb != null) row.carb = n.carb;
+  if (n.fat != null) row.fat = n.fat;
+  if (!Object.keys(row).length) return;
+  const { error } = await supabase.from("entries").update(row).eq("id", id);
+  if (error) throw error;
+}
+
 /** Bir kaydı yerinde günceller (tür + içerik değişebilir). id/created_at korunur. */
 export async function updateEntryContent(id: string, e: Entry): Promise<void> {
   const row: Record<string, unknown> = {

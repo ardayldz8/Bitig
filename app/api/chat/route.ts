@@ -48,7 +48,7 @@ NE HANGİ İŞLEME GİDER:
 ÖRNEKLER (mesaj -> doğru çıktı):
 - "şunu not al: market listesi yap" -> {"reply":"Not aldım.","actions":[{"type":"add","item":{"kind":"journal","text":"market listesi yap"}}]}
 - "yarın 9'da toplantıyı hatırlat" -> {"reply":"Kurdum: yarın 09:00 toplantı.","actions":[{"type":"reminder","text":"toplantı","at":"2026-06-25T09:00:00"}]}
-- "1 tabak mercimek çorbası içtim" -> {"reply":"Kaydettim: mercimek çorbası ~180 kcal.","actions":[{"type":"food","name":"mercimek çorbası","amount":1,"unit":"tabak","kcal":180,"protein":9,"carb":28,"fat":3}]}
+- "1 tabak mercimek çorbası içtim" -> {"reply":"Kaydettim: mercimek çorbası.","actions":[{"type":"food","name":"mercimek çorbası","amount":1,"unit":"tabak","kcal":180,"protein":9,"carb":28,"fat":3}]}  // reply'de kesin kcal YAZMA; sistem web'den hesaplayıp ekler
 - "5 km koştum" -> {"reply":"Koşuyu ekledim: 5 km.","actions":[{"type":"add","item":{"kind":"habit","name":"koşu","amount":5,"unit":"km","done":true}}]}
 - "bu hafta kaç kez spor yaptım?" -> {"reply":"Bu hafta 3 kez.","actions":[]}
 

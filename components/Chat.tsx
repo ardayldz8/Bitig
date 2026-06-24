@@ -10,6 +10,7 @@ import {
   insertReminder,
   insertGoal,
   updateEntryContent,
+  updateFoodNutrition,
   insertDungeon,
   fetchChatMessages,
   insertChatMessages,
@@ -168,6 +169,36 @@ export default function Chat({
     }
     await Promise.allSettled(ops);
     await onChanged();
+    // Yemek kayıtlarının kalorisini web araştırmasıyla arka planda doğrula/güncelle
+    const foodEntries = toAdd.filter(
+      (e): e is Extract<Entry, { kind: "food" }> => e.kind === "food"
+    );
+    if (foodEntries.length) void researchFood(foodEntries);
+  }
+
+  async function researchFood(foods: Extract<Entry, { kind: "food" }>[]) {
+    try {
+      const res = await fetch("/api/food-research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: foods.map((f) => ({ name: f.name, amount: f.amount, unit: f.unit })),
+        }),
+      });
+      const data = await res.json();
+      const results = data?.results;
+      if (!Array.isArray(results) || !results.length) return;
+      await Promise.allSettled(
+        foods.map((f, i) => {
+          const r = results[i];
+          if (!r || !r.kcal) return Promise.resolve(); // araştırma bulamadıysa model tahmini kalsın
+          return updateFoodNutrition(f.id, r);
+        })
+      );
+      await onChanged();
+    } catch {
+      // yoksay
+    }
   }
 
   async function send() {

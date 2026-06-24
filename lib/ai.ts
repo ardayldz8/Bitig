@@ -16,6 +16,7 @@ export interface GenOptions {
   temperature?: number;
   effort?: "minimal" | "low" | "medium" | "high"; // gpt-5 reasoning çabası (vars. minimal=hızlı)
   models?: string[]; // verilirse OPENROUTER_MODELS yerine bu zincir denenir
+  web?: boolean; // true ise OpenRouter web araması eklenir (kaynaktan doğrulama)
 }
 
 export function hasAiKey(): boolean {
@@ -43,6 +44,7 @@ async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
       temperature: opts.temperature ?? 0.4,
       // gpt-5 reasoning modellerini hızlandırır; reasoning olmayan modeller yok sayar
       reasoning: { effort: opts.effort ?? "minimal" },
+      ...(opts.web ? { plugins: [{ id: "web", max_results: 1 }] } : {}),
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
