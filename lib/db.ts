@@ -315,3 +315,37 @@ export async function deleteDungeon(id: string): Promise<void> {
   const { error } = await supabase.from("dungeons").delete().eq("id", id);
   if (error) throw error;
 }
+
+// --- Sohbet mesajları (cihazlar arası senkron + analiz) ---
+
+export async function fetchChatMessages(): Promise<
+  { role: "user" | "assistant"; text: string; note?: string }[]
+> {
+  const { data, error } = await supabase
+    .from("chat_messages")
+    .select("role,text,note")
+    .order("created_at", { ascending: true })
+    .limit(300);
+  if (error) throw error;
+  return (data ?? []).map((r) => ({
+    role: (r.role as "user" | "assistant") ?? "assistant",
+    text: String(r.text ?? ""),
+    note: (r.note as string) ?? undefined,
+  }));
+}
+
+export async function insertChatMessages(
+  msgs: { role: "user" | "assistant"; text: string; note?: string }[],
+  userId: string
+): Promise<void> {
+  if (!msgs.length) return;
+  const { error } = await supabase
+    .from("chat_messages")
+    .insert(msgs.map((m) => ({ user_id: userId, role: m.role, text: m.text, note: m.note ?? null })));
+  if (error) throw error;
+}
+
+export async function clearChatMessages(userId: string): Promise<void> {
+  const { error } = await supabase.from("chat_messages").delete().eq("user_id", userId);
+  if (error) throw error;
+}

@@ -11,6 +11,9 @@ import {
   insertGoal,
   updateEntryContent,
   insertDungeon,
+  fetchChatMessages,
+  insertChatMessages,
+  clearChatMessages,
 } from "@/lib/db";
 
 interface Msg {
@@ -62,6 +65,7 @@ export default function Chat({
   const key = `duzen.chat.${userId}`;
 
   useEffect(() => {
+    // Hızlı: yerel önbellek
     try {
       const raw = localStorage.getItem(key);
       if (raw) setMessages(JSON.parse(raw));
@@ -69,6 +73,12 @@ export default function Chat({
       // yoksay
     }
     setLoaded(true);
+    // Yetkili kaynak: bulut (cihazlar arası) — varsa yereli geçersiz kıl
+    fetchChatMessages()
+      .then((rows) => {
+        if (rows.length) setMessages(rows);
+      })
+      .catch(() => {});
   }, [key]);
 
   useEffect(() => {
@@ -184,10 +194,17 @@ export default function Chat({
       const data: ChatResponse = await res.json();
       const actions = Array.isArray(data.actions) ? data.actions : [];
       if (actions.length) await applyActions(actions);
-      setMessages((m) => [
-        ...m,
-        { role: "assistant", text: data.reply || "Tamam.", note: actionsNote(actions) },
-      ]);
+      const reply = data.reply || "Tamam.";
+      const note = actionsNote(actions);
+      setMessages((m) => [...m, { role: "assistant", text: reply, note }]);
+      // Buluta kaydet (cihazlar arası + analiz)
+      insertChatMessages(
+        [
+          { role: "user", text: value },
+          { role: "assistant", text: reply, note },
+        ],
+        userId
+      ).catch(() => {});
     } catch {
       setMessages((m) => [
         ...m,
@@ -205,6 +222,7 @@ export default function Chat({
     } catch {
       // yoksay
     }
+    clearChatMessages(userId).catch(() => {});
   }
 
   return (
