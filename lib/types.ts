@@ -165,6 +165,14 @@ export interface Goal {
   unit?: string;
 }
 
+/** Geçmiş filtreleme için AI'nın ürettiği akıllı çip/facet. */
+export interface Facet {
+  label: string;
+  emoji?: string;
+  kinds?: string[]; // eşleşen kayıt türleri (habit/task/mood/journal/food)
+  keywords?: string[]; // metinde aranan küçük harfli kökler
+}
+
 export interface ChatMessage {
   role: "user" | "assistant";
   text: string;

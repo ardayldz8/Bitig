@@ -2,8 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import type { Entry, Reminder, Goal, Routine, Profile, Dungeon } from "@/lib/types";
-import { dayKey, uid, itemToEntry } from "@/lib/store";
+import type { Entry, Reminder, Goal, Routine, Profile, Dungeon, Facet } from "@/lib/types";
+import { dayKey, uid, itemToEntry, entryText } from "@/lib/store";
 import { supabase } from "@/lib/supabase";
 import {
   fetchEntries,
@@ -67,7 +67,8 @@ export default function Home() {
   const [dungeons, setDungeons] = useState<Dungeon[]>([]);
   const [dungeonCleared, setDungeonCleared] = useState<{ name: string; rank: string } | null>(null);
   const [pw, setPw] = useState("");
-  const [pastFilter, setPastFilter] = useState<"all" | Entry["kind"]>("all");
+  const [facets, setFacets] = useState<Facet[]>([]);
+  const [pastFacet, setPastFacet] = useState<string>("all");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -113,6 +114,12 @@ export default function Home() {
       active = false;
     };
   }, [session?.user?.id]);
+
+  // Geçmiş için AI'nın ürettiği akıllı filtreler (günlük önbellekli)
+  useEffect(() => {
+    fetchFacets(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id, entries.length]);
 
   async function reload() {
     try {
@@ -271,6 +278,44 @@ export default function Home() {
       setPw("");
       flash("Şifre belirlendi ✓ Artık şifreyle girebilirsin");
     }
+  }
+
+  function fetchFacets(force: boolean) {
+    if (!session) return;
+    const ck = `bitig.facets.${session.user.id}.${dayKey()}`;
+    if (!force) {
+      try {
+        const raw = localStorage.getItem(ck);
+        if (raw) {
+          setFacets(JSON.parse(raw));
+          return;
+        }
+      } catch {
+        // yoksay
+      }
+    }
+    const pastEntries = entries.filter((e) => e.date !== dayKey());
+    if (!pastEntries.length) {
+      setFacets([]);
+      return;
+    }
+    fetch("/api/facets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entries: pastEntries.slice(0, 120) }),
+    })
+      .then((r) => r.json())
+      .then((d) => {
+        if (Array.isArray(d.facets)) {
+          setFacets(d.facets);
+          try {
+            localStorage.setItem(ck, JSON.stringify(d.facets));
+          } catch {
+            // yoksay
+          }
+        }
+      })
+      .catch(() => {});
   }
 
   async function toggleNotif() {
@@ -531,46 +576,66 @@ export default function Home() {
               <Empty tab="past" />
             ) : (
               <>
-                <div className="sticky top-0 z-[2] -mx-5 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)]/95 px-5 py-2 backdrop-blur">
-                  {PAST_FILTERS.map(([k, label]) => (
-                    <button
-                      key={k}
-                      onClick={() => setPastFilter(k)}
-                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
-                        pastFilter === k
-                          ? "bg-indigo-500 text-white ring-indigo-500"
-                          : "text-[var(--muted)] ring-[var(--border)]"
-                      }`}
-                    >
-                      {label}
-                    </button>
-                  ))}
+                <div className="sticky top-0 z-[2] -mx-5 flex items-center gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)]/95 px-5 py-2 backdrop-blur">
+                  <button
+                    onClick={() => setPastFacet("all")}
+                    className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                      pastFacet === "all"
+                        ? "bg-indigo-500 text-white ring-indigo-500"
+                        : "text-[var(--muted)] ring-[var(--border)]"
+                    }`}
+                  >
+                    Tümü
+                  </button>
+                  {facets
+                    .filter((f) => past.some((e) => matchFacet(e, f)))
+                    .map((f) => (
+                      <button
+                        key={f.label}
+                        onClick={() => setPastFacet(f.label)}
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                          pastFacet === f.label
+                            ? "bg-indigo-500 text-white ring-indigo-500"
+                            : "text-[var(--muted)] ring-[var(--border)]"
+                        }`}
+                      >
+                        {f.emoji ? f.emoji + " " : ""}
+                        {f.label}
+                      </button>
+                    ))}
+                  <button
+                    onClick={() => fetchFacets(true)}
+                    title="Filtreleri yenile"
+                    className="shrink-0 rounded-full px-2 py-1 text-xs text-[var(--muted)] ring-1 ring-[var(--border)]"
+                  >
+                    ↻
+                  </button>
                 </div>
-                {pastByDay
-                  .map(
-                    ([day, es]) =>
-                      [day, pastFilter === "all" ? es : es.filter((e) => e.kind === pastFilter)] as [
-                        string,
-                        Entry[],
-                      ]
-                  )
-                  .filter(([, es]) => es.length > 0)
-                  .map(([day, dayEntries]) => (
-                    <div key={day} className="mt-3">
-                      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold capitalize">
-                        {dayLabel(day)}
-                        <span className="rounded-full bg-[var(--card)] px-2 text-xs font-normal text-[var(--muted)] ring-1 ring-[var(--border)]">
-                          {dayEntries.length}
-                        </span>
-                      </h3>
-                      <EntryList
-                        entries={dayEntries}
-                        onToggle={toggleDone}
-                        onDelete={remove}
-                        onEdit={setEditing}
-                      />
-                    </div>
-                  ))}
+                {(() => {
+                  const sel = facets.find((f) => f.label === pastFacet);
+                  return pastByDay
+                    .map(
+                      ([day, es]) =>
+                        [day, sel ? es.filter((e) => matchFacet(e, sel)) : es] as [string, Entry[]]
+                    )
+                    .filter(([, es]) => es.length > 0)
+                    .map(([day, dayEntries]) => (
+                      <div key={day} className="mt-3">
+                        <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold capitalize">
+                          {dayLabel(day)}
+                          <span className="rounded-full bg-[var(--card)] px-2 text-xs font-normal text-[var(--muted)] ring-1 ring-[var(--border)]">
+                            {dayEntries.length}
+                          </span>
+                        </h3>
+                        <EntryList
+                          entries={dayEntries}
+                          onToggle={toggleDone}
+                          onDelete={remove}
+                          onEdit={setEditing}
+                        />
+                      </div>
+                    ));
+                })()}
               </>
             )}
           </div>
@@ -722,14 +787,14 @@ export default function Home() {
   );
 }
 
-const PAST_FILTERS: ["all" | Entry["kind"], string][] = [
-  ["all", "Tümü"],
-  ["habit", "🔁"],
-  ["task", "✅"],
-  ["food", "🍽️"],
-  ["mood", "💭"],
-  ["journal", "📝"],
-];
+function matchFacet(e: Entry, f: Facet): boolean {
+  if (f.kinds && f.kinds.includes(e.kind)) return true;
+  if (f.keywords && f.keywords.length) {
+    const t = entryText(e).toLocaleLowerCase("tr");
+    return f.keywords.some((k) => t.includes(k));
+  }
+  return false;
+}
 
 function dayLabel(day: string): string {
   const t = new Date();
