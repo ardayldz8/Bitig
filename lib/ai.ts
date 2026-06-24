@@ -1,12 +1,12 @@
 import { geminiGenerate, DEFAULT_MODELS as GEMINI_MODELS } from "./gemini";
 
 // OpenRouter: tek anahtarla çok model + otomatik fallback (OpenAI-uyumlu API).
-// Birincil ÜCRETLİ gpt-5-nano (tutarlı, native JSON, iyi Türkçe); hata verirse
-// sıradaki ÜCRETSİZ yedeklere düşer. ~$0.0002/çağrı → $3.67 ≈ 19 bin çağrı.
+// Birincil: google/gemini-2.5-flash — kafa-kafaya testte en iyi (hızlı ~2s, Türkçe +
+// JSON + çoklu-niyet doğru; reasoning yok → ucuz). Hata verirse sıradakine düşer.
 const OPENROUTER_MODELS = [
-  "openai/gpt-5-nano", // BİRİNCİL (ücretli): güvenilir, hızlı, native JSON
-  "qwen/qwen3-next-80b-a3b-instruct:free", // ücretsiz yedek 1
-  "meta-llama/llama-3.3-70b-instruct:free", // ücretsiz yedek 2
+  "google/gemini-2.5-flash", // BİRİNCİL: hızlı + isabetli
+  "qwen/qwen3.5-flash-02-23", // yedek: hızlı, Türkçe güçlü
+  "meta-llama/llama-3.3-70b-instruct:free", // ücretsiz son yedek
 ];
 
 export interface GenOptions {
@@ -15,6 +15,7 @@ export interface GenOptions {
   json?: boolean;
   temperature?: number;
   effort?: "minimal" | "low" | "medium" | "high"; // gpt-5 reasoning çabası (vars. minimal=hızlı)
+  models?: string[]; // verilirse OPENROUTER_MODELS yerine bu zincir denenir
 }
 
 export function hasAiKey(): boolean {
@@ -24,6 +25,7 @@ export function hasAiKey(): boolean {
 async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
+  const chain = opts.models?.length ? opts.models : OPENROUTER_MODELS;
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -32,8 +34,8 @@ async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
       "X-Title": "duzen",
     },
     body: JSON.stringify({
-      model: OPENROUTER_MODELS[0],
-      models: OPENROUTER_MODELS, // OpenRouter: birinci başarısızsa sıradakine geçer
+      model: chain[0],
+      models: chain, // OpenRouter: birinci başarısızsa sıradakine geçer
       messages: [
         { role: "system", content: opts.system },
         { role: "user", content: opts.user },

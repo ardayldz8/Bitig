@@ -252,6 +252,7 @@ export async function POST(req: NextRequest) {
   let now = "";
   let goalsList: Goal[] = [];
   let calorieTarget: number | null = null;
+  let testModel = ""; // opsiyonel: model karşılaştırma testi için (istemci normalde göndermez)
   try {
     const body = await req.json();
     message = String(body?.message ?? "");
@@ -261,6 +262,7 @@ export async function POST(req: NextRequest) {
     now = String(body?.now ?? "");
     if (Array.isArray(body?.goals)) goalsList = body.goals as Goal[];
     if (typeof body?.calorieTarget === "number") calorieTarget = body.calorieTarget;
+    if (typeof body?.model === "string") testModel = body.model;
   } catch {
     // gövde okunamadı
   }
@@ -287,6 +289,7 @@ export async function POST(req: NextRequest) {
       json: true,
       temperature: 0.3,
       effort: "low", // chat'te niyet yönlendirmesi için biraz daha akıl (quests vb. minimal kalır)
+      ...(typeof testModel === "string" && testModel ? { models: [testModel] } : {}),
     });
     if (!out) throw new Error("empty");
     const parsed = JSON.parse(out);
