@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ChatAction, ChatResponse, Entry, Goal } from "@/lib/types";
+import type { ChatAction, ChatResponse, Entry, Goal, Reminder } from "@/lib/types";
 import { itemToEntry, dayKey, uid, similar, entryText } from "@/lib/store";
 import { authHeaders } from "@/lib/api";
 import { notificationsEnabled } from "@/lib/push";
@@ -10,6 +10,7 @@ import {
   setDone,
   deleteEntry,
   insertReminder,
+  deleteReminder,
   insertGoal,
   updateEntryContent,
   updateFoodNutrition,
@@ -23,6 +24,7 @@ interface Msg {
   role: "user" | "assistant";
   text: string;
   note?: string; // uygulanan işlemlerin kısa özeti
+  undoIds?: string[]; // bu mesajda eklenen kayıt id'leri (geri al için)
 }
 
 function actionsNote(actions: ChatAction[]): string | undefined {
@@ -50,12 +52,14 @@ export default function Chat({
   userId,
   entries,
   goals,
+  reminders,
   calorieTarget,
   onChanged,
 }: {
   userId: string;
   entries: Entry[];
   goals: Goal[];
+  reminders: Reminder[];
   calorieTarget: number | null;
   onChanged: () => Promise<void> | void;
 }) {
@@ -139,7 +143,14 @@ export default function Chat({
       } else if (a.type === "reminder") {
         const at = new Date(a.at);
         if (!Number.isNaN(at.getTime()))
-          ops.push(insertReminder({ id: uid(), text: a.text, remind_at: at.toISOString() }, userId));
+          ops.push(
+            insertReminder(
+              { id: uid(), text: a.text, remind_at: at.toISOString(), repeat: a.repeat ?? null },
+              userId
+            )
+          );
+      } else if (a.type === "reminderDelete") {
+        ops.push(deleteReminder(a.id));
       } else if (a.type === "goal") {
         ops.push(
           insertGoal(
@@ -179,7 +190,7 @@ export default function Chat({
       (e): e is Extract<Entry, { kind: "food" }> => e.kind === "food"
     );
     if (foodEntries.length) void researchFood(foodEntries);
-    return { failed, skipped };
+    return { failed, skipped, addedIds: toAdd.map((e) => e.id) };
   }
 
   async function researchFood(foods: Extract<Entry, { kind: "food" }>[]) {
@@ -207,6 +218,18 @@ export default function Chat({
     }
   }
 
+  async function undoEntries(ids: string[], idx: number) {
+    await Promise.allSettled(ids.map((id) => deleteEntry(id)));
+    await onChanged();
+    setMessages((m) =>
+      m.map((x, i) =>
+        i === idx
+          ? { ...x, undoIds: undefined, note: (x.note ? x.note + " · " : "") + "↩ geri alındı" }
+          : x
+      )
+    );
+  }
+
   async function send() {
     const value = input.trim();
     if (!value || busy) return;
@@ -225,23 +248,29 @@ export default function Chat({
           today: dayKey(),
           now: new Date().toLocaleString("sv-SE"),
           goals,
+          reminders,
           calorieTarget,
         }),
       });
       const data: ChatResponse = await res.json();
       const actions = Array.isArray(data.actions) ? data.actions : [];
       let warn = "";
+      let addedIds: string[] = [];
       if (actions.length) {
         const r = await applyActions(actions);
         if (r.skipped) warn += `\n\n(${r.skipped} çok benzer kayıt mükerrer sayılıp atlandı.)`;
         if (r.failed) warn += `\n\n⚠️ ${r.failed} işlem kaydedilemedi — tekrar dener misin?`;
+        addedIds = r.addedIds;
       }
       if (actions.some((a) => a.type === "reminder") && !(await notificationsEnabled())) {
         warn += `\n\n🔔 Bildirimler kapalı — hatırlatma gelmeyebilir. Özet → Bildirimler'den aç.`;
       }
       const reply = (data.reply || "Tamam.") + warn;
       const note = actionsNote(actions);
-      setMessages((m) => [...m, { role: "assistant", text: reply, note }]);
+      setMessages((m) => [
+        ...m,
+        { role: "assistant", text: reply, note, undoIds: addedIds.length ? addedIds : undefined },
+      ]);
       // Buluta kaydet (cihazlar arası + analiz)
       insertChatMessages(
         [
@@ -301,7 +330,11 @@ export default function Chat({
         ) : (
           <div className="space-y-3">
             {messages.map((m, i) => (
-              <Bubble key={i} m={m} />
+              <Bubble
+                key={i}
+                m={m}
+                onUndo={m.undoIds && m.undoIds.length ? () => undoEntries(m.undoIds!, i) : undefined}
+              />
             ))}
           </div>
         )}
@@ -379,7 +412,7 @@ export default function Chat({
   );
 }
 
-function Bubble({ m }: { m: Msg }) {
+function Bubble({ m, onUndo }: { m: Msg; onUndo?: () => void }) {
   const isUser = m.role === "user";
   return (
     <div className={`flex ${isUser ? "justify-end" : "justify-start"}`}>
@@ -395,6 +428,14 @@ function Bubble({ m }: { m: Msg }) {
           <p className={`mt-1 text-xs ${isUser ? "text-white/70" : "text-[var(--muted)]"}`}>
             {m.note}
           </p>
+        )}
+        {onUndo && (
+          <button
+            onClick={onUndo}
+            className="mt-1.5 text-xs font-medium text-[var(--muted)] underline transition hover:text-[var(--foreground)]"
+          >
+            ↩ Geri al
+          </button>
         )}
       </div>
     </div>

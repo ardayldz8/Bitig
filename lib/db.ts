@@ -184,12 +184,18 @@ export async function updateEntryContent(id: string, e: Entry): Promise<void> {
 // --- Hatırlatmalar ---
 
 export async function insertReminder(
-  r: { id: string; text: string; remind_at: string },
+  r: { id: string; text: string; remind_at: string; repeat?: string | null },
   userId: string
 ): Promise<void> {
   const { error } = await supabase
     .from("reminders")
-    .insert({ id: r.id, user_id: userId, text: r.text, remind_at: r.remind_at });
+    .insert({
+      id: r.id,
+      user_id: userId,
+      text: r.text,
+      remind_at: r.remind_at,
+      repeat: r.repeat ?? null,
+    });
   if (error) throw error;
 }
 
@@ -197,7 +203,7 @@ export async function insertReminder(
 export async function fetchReminders(): Promise<Reminder[]> {
   const { data, error } = await supabase
     .from("reminders")
-    .select("id,text,remind_at,sent")
+    .select("id,text,remind_at,sent,repeat")
     .eq("sent", false)
     .order("remind_at", { ascending: true });
   if (error) throw error;

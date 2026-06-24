@@ -77,7 +77,8 @@ export type ChatAction =
   | { type: "complete"; id: string; done: boolean }
   | { type: "delete"; id: string }
   | { type: "edit"; id: string; item: ParsedItem } // o kaydı yeni içerikle değiştirir (tür değişebilir)
-  | { type: "reminder"; text: string; at: string } // at: yerel "YYYY-MM-DDTHH:mm:ss"
+  | { type: "reminder"; text: string; at: string; repeat?: "daily" | "weekly" } // at: yerel "YYYY-MM-DDTHH:mm:ss"
+  | { type: "reminderDelete"; id: string } // mevcut hatırlatmayı iptal et
   | {
       type: "food";
       name: string;
@@ -104,6 +105,7 @@ export interface Reminder {
   text: string;
   remind_at: string; // ISO (UTC)
   sent: boolean;
+  repeat?: string | null; // null = tek sefer · "daily" · "weekly"
 }
 
 /** Günlük quest (Solo Leveling "System"). */

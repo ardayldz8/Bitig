@@ -508,6 +508,7 @@ export default function Home() {
             userId={session.user.id}
             entries={entries}
             goals={goals}
+            reminders={reminders}
             calorieTarget={targets?.target ?? null}
             onChanged={reload}
           />

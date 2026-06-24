@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { aiGenerate, hasAiKey } from "@/lib/ai";
 import { getUserId } from "@/lib/server-auth";
 import { fallbackParse } from "@/lib/parse-fallback";
-import type { ChatAction, ChatMessage, ChatResponse, Entry, Goal, ParsedItem } from "@/lib/types";
+import type { ChatAction, ChatMessage, ChatResponse, Entry, Goal, ParsedItem, Reminder } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const maxDuration = 30;
@@ -17,7 +17,7 @@ TEMEL İLKE — YAP, SORMA:
 - Yalnızca gerçekten anlamadığında tek kısa netleştirme sorusu sor (o zaman actions boş).
 
 NE HANGİ İŞLEME GİDER:
-- "hatırlat / unutma / ...'da şunu yap" → reminder
+- "hatırlat / unutma" → reminder ("her gün/her sabah/her hafta/her pazartesi" ise repeat ekle) · "şu hatırlatmayı iptal et/sil/kaldır" → reminderDelete
 - "not al / kaydet / şunu yaz / aklımda olsun" → journal (notun metnini text yap) — ASLA boş bırakma
 - "... yedim / içtim / kahvaltıda ..." → food (kcal+makro tahmini SENİN)
 - "... yaptım / koştum / okudum / çalıştım" → habit (done:true)
@@ -42,7 +42,8 @@ NE HANGİ İŞLEME GİDER:
 - {"type":"complete","id":"<mevcut kayıt id>","done":true}   // done:false ile geri alınır
 - {"type":"delete","id":"<mevcut kayıt id>"}
 - {"type":"edit","id":"<mevcut kayıt id>","item":{...}}  // o kaydı item'daki YENİ içerikle değiştirir (tür değişebilir). item add'deki biçimde (food dahil). Yeniden kategorize için doğru "kind"ı ver.
-- {"type":"reminder","text":"hatırlatılacak şey","at":"YYYY-MM-DDTHH:mm:ss"}  // at = YEREL tarih-saat; "şu anki yerel tarih-saat"ten hesapla (ör. "yarın 14:00'te X" -> yarının tarihi T14:00:00). Hatırlatma kurunca reply'de saatini teyit et.
+- {"type":"reminder","text":"kısa konu","at":"YYYY-MM-DDTHH:mm:ss","repeat":"daily"}  // at = YEREL tarih-saat; "şu anki yerel tarih-saat"ten hesapla. repeat OPSİYONEL: "her gün/her sabah"->"daily", "her hafta/her pazartesi"->"weekly" (at'i ilk uygun tarihe koy). Tek seferlikse repeat hiç verme.
+- {"type":"reminderDelete","id":"<mevcut hatırlatma id>"}  // hatırlatma iptal/sil. Saat/metin değiştirme = reminderDelete + yeni reminder.
 - {"type":"goal","title":"Haftada 3 spor","habit":"spor","target":3,"period":"week","metric":"count","unit":""}  // "habit"=eşleşecek alışkanlık adı; sayı hedefi metric:"count"; miktar hedefi (ör. günde 2L su) metric:"amount"+unit. period: "day"|"week".
 - {"type":"food","name":"döner","amount":1,"unit":"porsiyon","kcal":600,"protein":30,"carb":50,"fat":28}  // YEMEK/İÇECEK. kcal + makroları (protein/karbonhidrat/yağ, gram) porsiyona göre SEN tahmin et. Birden çok yiyecek varsa her biri ayrı food.
 - {"type":"dungeon","name":"Demir İrade Zindanı","rank":"C","boss":"7 gün şekersiz hayatta kal","steps":["3 gün üst üste spor","her gün 2L su","1 hafta erken kalk"]}  // kullanıcı meydan okuma/zindan isterse. rank E-S; 3-5 SOMUT adım; temalı ad + kısa boss.
@@ -141,7 +142,10 @@ function validateActions(raw: unknown): ChatAction[] {
       o.text.trim() &&
       typeof o.at === "string"
     ) {
-      out.push({ type: "reminder", text: o.text.trim(), at: o.at });
+      const rep = o.repeat === "daily" || o.repeat === "weekly" ? o.repeat : undefined;
+      out.push({ type: "reminder", text: o.text.trim(), at: o.at, ...(rep ? { repeat: rep } : {}) });
+    } else if (o.type === "reminderDelete" && typeof o.id === "string") {
+      out.push({ type: "reminderDelete", id: o.id });
     } else if (
       o.type === "goal" &&
       typeof o.title === "string" &&
@@ -234,7 +238,8 @@ function buildUserContent(
   today: string,
   now: string,
   goalsList: Goal[],
-  calorieTarget: number | null
+  calorieTarget: number | null,
+  remindersList: Reminder[]
 ) {
   const hist = (history || [])
     .slice(-8)
@@ -257,6 +262,15 @@ function buildUserContent(
     calorieTarget
       ? `Günlük kalori hedefi: ${calorieTarget} kcal (bugünkü 'food' kayıtlarının kcal toplamını çıkarıp kalanı belirtebilirsin).`
       : "",
+    "Aktif hatırlatmalar (JSON, id'li — iptal/düzenleme için id kullan): " +
+      JSON.stringify(
+        (remindersList ?? []).map((r) => ({
+          id: r.id,
+          text: r.text,
+          at: r.remind_at,
+          repeat: r.repeat ?? null,
+        }))
+      ),
     "",
     "Son sohbet:",
     hist || "(yok)",
@@ -275,6 +289,7 @@ export async function POST(req: NextRequest) {
   let now = "";
   let goalsList: Goal[] = [];
   let calorieTarget: number | null = null;
+  let remindersList: Reminder[] = [];
   let testModel = ""; // opsiyonel: model karşılaştırma testi için (istemci normalde göndermez)
   try {
     const body = await req.json();
@@ -285,6 +300,7 @@ export async function POST(req: NextRequest) {
     now = String(body?.now ?? "");
     if (Array.isArray(body?.goals)) goalsList = body.goals as Goal[];
     if (typeof body?.calorieTarget === "number") calorieTarget = body.calorieTarget;
+    if (Array.isArray(body?.reminders)) remindersList = body.reminders as Reminder[];
     if (typeof body?.model === "string") testModel = body.model;
   } catch {
     // gövde okunamadı
@@ -308,7 +324,7 @@ export async function POST(req: NextRequest) {
   try {
     const out = await aiGenerate({
       system: SYSTEM_PROMPT,
-      user: buildUserContent(message, history, entries, today, now, goalsList, calorieTarget),
+      user: buildUserContent(message, history, entries, today, now, goalsList, calorieTarget, remindersList),
       json: true,
       temperature: 0.3,
       effort: "low", // chat'te niyet yönlendirmesi için biraz daha akıl (quests vb. minimal kalır)
