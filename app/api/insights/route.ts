@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { Entry } from "@/lib/types";
 import { aiGenerate } from "@/lib/ai";
+import { getUserId } from "@/lib/server-auth";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 // Modeller lib/gemini.ts içindeki DEFAULT_MODELS'ten gelir (yedek zinciri).
 
@@ -76,6 +78,7 @@ async function geminiInsight(entries: Entry[]): Promise<string | null> {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await getUserId(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   let entries: Entry[] = [];
   try {
     const body = await req.json();

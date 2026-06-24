@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import type { Entry, Reminder, Goal, Routine, Profile, Dungeon, Facet } from "@/lib/types";
 import { dayKey, uid, itemToEntry, entryText } from "@/lib/store";
+import { authHeaders } from "@/lib/api";
 import { supabase } from "@/lib/supabase";
 import {
   fetchEntries,
@@ -250,7 +251,7 @@ export default function Home() {
     try {
       const res = await fetch("/api/insights", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({ entries }),
       });
       const data = await res.json();

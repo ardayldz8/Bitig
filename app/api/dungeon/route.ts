@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aiGenerate, hasAiKey } from "@/lib/ai";
+import { getUserId } from "@/lib/server-auth";
 import type { Entry, Goal } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 const SYSTEM_PROMPT = `Sen "Bitig" uygulamasının Solo Leveling temalı "Zindan" (dungeon) üreticisisin. Kullanıcının alışkanlıklarına ve hedeflerine bakıp, onu zorlayacak ama ulaşılabilir, çok adımlı bir meydan okuma üret.
 
@@ -62,6 +64,7 @@ function validate(o: unknown) {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await getUserId(req))) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   let entries: Entry[] = [];
   let goals: Goal[] = [];
   let today = "";

@@ -27,6 +27,8 @@ async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) return null;
   const chain = opts.models?.length ? opts.models : OPENROUTER_MODELS;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 30000); // sonsuz beklemeyi engelle
   const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
     headers: {
@@ -47,7 +49,9 @@ async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
       ...(opts.web ? { plugins: [{ id: "web", max_results: 1 }] } : {}),
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
+    signal: ctrl.signal,
   });
+  clearTimeout(timer);
   if (!res.ok) throw new Error("openrouter_" + res.status);
   const data = await res.json();
   const text = data?.choices?.[0]?.message?.content;

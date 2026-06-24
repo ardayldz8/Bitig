@@ -3,6 +3,7 @@
 import { useState } from "react";
 import type { Dungeon, Entry, Goal } from "@/lib/types";
 import { dayKey, uid } from "@/lib/store";
+import { authHeaders } from "@/lib/api";
 
 export default function Dungeons({
   dungeons,
@@ -27,7 +28,7 @@ export default function Dungeons({
     try {
       const res = await fetch("/api/dungeon", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({ entries: entries.slice(0, 80), goals, today: dayKey() }),
       });
       const data = await res.json();

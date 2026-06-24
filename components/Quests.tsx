@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { Entry, Quest, QuestSpec } from "@/lib/types";
 import { itemToEntry, dayKey, uid } from "@/lib/store";
 import { insertEntries, deleteEntry } from "@/lib/db";
+import { authHeaders } from "@/lib/api";
 
 // AI yavaş/erişilemezse asla boş kalmasın diye yerel yedek questler
 const LOCAL_FALLBACK: QuestSpec[] = [
@@ -54,7 +55,7 @@ export default function Quests({
     try {
       const res = await fetch("/api/quests", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({ entries: entries.slice(0, 80), today: dayKey() }),
         signal: ctrl.signal,
       });

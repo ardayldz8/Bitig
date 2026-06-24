@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aiGenerate, hasAiKey } from "@/lib/ai";
+import { getUserId } from "@/lib/server-auth";
 import type { Entry, Facet } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 const KINDS = ["habit", "task", "mood", "journal", "food"];
 
@@ -75,6 +77,7 @@ function validate(raw: unknown): Facet[] {
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await getUserId(req))) return NextResponse.json({ facets: [] }, { status: 401 });
   let entries: Entry[] = [];
   try {
     const body = await req.json();

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { aiGenerate, hasAiKey } from "@/lib/ai";
+import { getUserId } from "@/lib/server-auth";
 import { fallbackParse } from "@/lib/parse-fallback";
 import type { ChatAction, ChatMessage, ChatResponse, Entry, Goal, ParsedItem } from "@/lib/types";
 
 export const runtime = "nodejs";
+export const maxDuration = 30;
 
 const SYSTEM_PROMPT = `Sen "Bitig" adlı kişisel takip uygulamasının asistanısın. Görevin: kullanıcının yazdığı HER mesajı değerlendirip uygun işlemi UYGULAMAK. Sen bir yapıcısın — gevezelik etmez, işi yaparsın.
 
@@ -264,6 +266,8 @@ function buildUserContent(
 }
 
 export async function POST(req: NextRequest) {
+  if (!(await getUserId(req)))
+    return NextResponse.json({ reply: "Oturum doğrulanamadı, tekrar giriş yap.", actions: [] }, { status: 401 });
   let message = "";
   let history: ChatMessage[] = [];
   let entries: Entry[] = [];

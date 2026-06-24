@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChatAction, ChatResponse, Entry, Goal } from "@/lib/types";
 import { itemToEntry, dayKey, uid, similar, entryText } from "@/lib/store";
+import { authHeaders } from "@/lib/api";
+import { notificationsEnabled } from "@/lib/push";
 import {
   insertEntries,
   setDone,
@@ -97,6 +99,7 @@ export default function Chat({
     const ids = new Set(entries.map((e) => e.id));
 
     const toAdd: Entry[] = [];
+    let skipped = 0;
     for (const a of actions) {
       let entry: Entry | undefined;
       if (a.type === "add") {
@@ -121,6 +124,7 @@ export default function Chat({
         (x) => x.kind === e.kind && x.date === e.date && similar(entryText(x), entryText(e)) > 0.7
       );
       if (!dup) toAdd.push(e);
+      else skipped++;
     }
     const ops: Promise<unknown>[] = [];
     if (toAdd.length) ops.push(insertEntries(toAdd, userId));
@@ -167,20 +171,22 @@ export default function Chat({
         );
       }
     }
-    await Promise.allSettled(ops);
+    const settled = await Promise.allSettled(ops);
+    const failed = settled.filter((s) => s.status === "rejected").length;
     await onChanged();
     // Yemek kayıtlarının kalorisini web araştırmasıyla arka planda doğrula/güncelle
     const foodEntries = toAdd.filter(
       (e): e is Extract<Entry, { kind: "food" }> => e.kind === "food"
     );
     if (foodEntries.length) void researchFood(foodEntries);
+    return { failed, skipped };
   }
 
   async function researchFood(foods: Extract<Entry, { kind: "food" }>[]) {
     try {
       const res = await fetch("/api/food-research", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           items: foods.map((f) => ({ name: f.name, amount: f.amount, unit: f.unit })),
         }),
@@ -211,7 +217,7 @@ export default function Chat({
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: await authHeaders(),
         body: JSON.stringify({
           message: value,
           history,
@@ -224,8 +230,16 @@ export default function Chat({
       });
       const data: ChatResponse = await res.json();
       const actions = Array.isArray(data.actions) ? data.actions : [];
-      if (actions.length) await applyActions(actions);
-      const reply = data.reply || "Tamam.";
+      let warn = "";
+      if (actions.length) {
+        const r = await applyActions(actions);
+        if (r.skipped) warn += `\n\n(${r.skipped} çok benzer kayıt mükerrer sayılıp atlandı.)`;
+        if (r.failed) warn += `\n\n⚠️ ${r.failed} işlem kaydedilemedi — tekrar dener misin?`;
+      }
+      if (actions.some((a) => a.type === "reminder") && !(await notificationsEnabled())) {
+        warn += `\n\n🔔 Bildirimler kapalı — hatırlatma gelmeyebilir. Özet → Bildirimler'den aç.`;
+      }
+      const reply = (data.reply || "Tamam.") + warn;
       const note = actionsNote(actions);
       setMessages((m) => [...m, { role: "assistant", text: reply, note }]);
       // Buluta kaydet (cihazlar arası + analiz)
