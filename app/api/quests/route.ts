@@ -68,6 +68,7 @@ function compact(entries: Entry[]) {
     if (e.kind === "habit") return { kind: "habit", name: e.name, date: e.date };
     if (e.kind === "task") return { kind: "task", title: e.title, done: e.done, date: e.date };
     if (e.kind === "mood") return { kind: "mood", label: e.label, date: e.date };
+    if (e.kind === "food") return { kind: "food", name: e.name, kcal: e.kcal, date: e.date };
     return { kind: "journal", date: e.date };
   });
 }

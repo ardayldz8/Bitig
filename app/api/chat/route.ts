@@ -208,6 +208,19 @@ function compact(entries: Entry[]) {
         return { id: e.id, date: e.date, kind: "mood", score: e.score, label: e.label };
       case "journal":
         return { id: e.id, date: e.date, kind: "journal", text: e.text.slice(0, 160) };
+      case "food":
+        return {
+          id: e.id,
+          date: e.date,
+          kind: "food",
+          name: e.name,
+          amount: e.amount,
+          unit: e.unit,
+          kcal: e.kcal,
+          protein: e.protein,
+          carb: e.carb,
+          fat: e.fat,
+        };
     }
   });
 }

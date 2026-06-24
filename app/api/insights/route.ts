@@ -6,7 +6,7 @@ export const runtime = "nodejs";
 
 // Modeller lib/gemini.ts içindeki DEFAULT_MODELS'ten gelir (yedek zinciri).
 
-const SYSTEM_PROMPT = `Sen "Bitig" uygulamasının yapay zeka koçusun. Kullanıcının son günlerdeki kayıtlarını (alışkanlık, görev, ruh hali, günlük) JSON olarak alırsın. Kısa, sıcak ve işe yarar bir Türkçe özet yaz.
+const SYSTEM_PROMPT = `Sen "Bitig" uygulamasının yapay zeka koçusun. Kullanıcının son günlerdeki kayıtlarını (alışkanlık, görev, ruh hali, günlük, beslenme) JSON olarak alırsın. Kısa, sıcak ve işe yarar bir Türkçe özet yaz.
 
 Biçim (Markdown, kısa tut):
 **Özet:** Genel durumu 1-2 cümlede anlat.
@@ -30,6 +30,8 @@ function compact(entries: Entry[]) {
         return { d: e.date, t: "mood", score: e.score, label: e.label };
       case "journal":
         return { d: e.date, t: "journal", text: e.text.slice(0, 200) };
+      case "food":
+        return { d: e.date, t: "food", name: e.name, kcal: e.kcal };
     }
   });
 }
