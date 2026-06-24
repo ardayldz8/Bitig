@@ -67,6 +67,7 @@ export default function Home() {
   const [dungeons, setDungeons] = useState<Dungeon[]>([]);
   const [dungeonCleared, setDungeonCleared] = useState<{ name: string; rank: string } | null>(null);
   const [pw, setPw] = useState("");
+  const [pastFilter, setPastFilter] = useState<"all" | Entry["kind"]>("all");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -529,19 +530,48 @@ export default function Home() {
             {past.length === 0 ? (
               <Empty tab="past" />
             ) : (
-              pastByDay.map(([day, dayEntries]) => (
-                <div key={day} className="mt-2">
-                  <h3 className="sticky top-0 z-[1] -mx-5 bg-[var(--background)]/90 px-5 py-1.5 text-sm font-semibold capitalize backdrop-blur">
-                    {dayLabel(day)}
-                  </h3>
-                  <EntryList
-                    entries={dayEntries}
-                    onToggle={toggleDone}
-                    onDelete={remove}
-                    onEdit={setEditing}
-                  />
+              <>
+                <div className="sticky top-0 z-[2] -mx-5 flex gap-1.5 overflow-x-auto border-b border-[var(--border)] bg-[var(--background)]/95 px-5 py-2 backdrop-blur">
+                  {PAST_FILTERS.map(([k, label]) => (
+                    <button
+                      key={k}
+                      onClick={() => setPastFilter(k)}
+                      className={`shrink-0 rounded-full px-3 py-1 text-xs font-medium ring-1 transition ${
+                        pastFilter === k
+                          ? "bg-indigo-500 text-white ring-indigo-500"
+                          : "text-[var(--muted)] ring-[var(--border)]"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
-              ))
+                {pastByDay
+                  .map(
+                    ([day, es]) =>
+                      [day, pastFilter === "all" ? es : es.filter((e) => e.kind === pastFilter)] as [
+                        string,
+                        Entry[],
+                      ]
+                  )
+                  .filter(([, es]) => es.length > 0)
+                  .map(([day, dayEntries]) => (
+                    <div key={day} className="mt-3">
+                      <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold capitalize">
+                        {dayLabel(day)}
+                        <span className="rounded-full bg-[var(--card)] px-2 text-xs font-normal text-[var(--muted)] ring-1 ring-[var(--border)]">
+                          {dayEntries.length}
+                        </span>
+                      </h3>
+                      <EntryList
+                        entries={dayEntries}
+                        onToggle={toggleDone}
+                        onDelete={remove}
+                        onEdit={setEditing}
+                      />
+                    </div>
+                  ))}
+              </>
             )}
           </div>
         )}
@@ -691,6 +721,15 @@ export default function Home() {
     </main>
   );
 }
+
+const PAST_FILTERS: ["all" | Entry["kind"], string][] = [
+  ["all", "Tümü"],
+  ["habit", "🔁"],
+  ["task", "✅"],
+  ["food", "🍽️"],
+  ["mood", "💭"],
+  ["journal", "📝"],
+];
 
 function dayLabel(day: string): string {
   const t = new Date();

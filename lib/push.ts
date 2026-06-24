@@ -12,6 +12,15 @@ function urlBase64ToBuffer(base64String: string): ArrayBuffer {
   return buffer;
 }
 
+function bufEq(a: ArrayBuffer | null, b: ArrayBuffer): boolean {
+  if (!a) return false;
+  const x = new Uint8Array(a);
+  const y = new Uint8Array(b);
+  if (x.length !== y.length) return false;
+  for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return false;
+  return true;
+}
+
 export function notificationsSupported(): boolean {
   return (
     typeof window !== "undefined" &&
@@ -47,11 +56,19 @@ export async function enableNotifications(
 
   try {
     const reg = await navigator.serviceWorker.ready;
+    const wantKey = urlBase64ToBuffer(VAPID_PUBLIC);
     let sub = await reg.pushManager.getSubscription();
+    // Mevcut abonelik farklı bir VAPID anahtarıyla oluştuysa (anahtar döndüyse) yenile
+    if (sub && !bufEq(sub.options?.applicationServerKey ?? null, wantKey)) {
+      const oldEndpoint = sub.endpoint;
+      await sub.unsubscribe().catch(() => {});
+      await supabase.from("push_subscriptions").delete().eq("endpoint", oldEndpoint);
+      sub = null;
+    }
     if (!sub) {
       sub = await reg.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToBuffer(VAPID_PUBLIC),
+        applicationServerKey: wantKey,
       });
     }
     const json = sub.toJSON() as { endpoint?: string };

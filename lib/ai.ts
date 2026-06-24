@@ -14,6 +14,7 @@ export interface GenOptions {
   user: string;
   json?: boolean;
   temperature?: number;
+  effort?: "minimal" | "low" | "medium" | "high"; // gpt-5 reasoning çabası (vars. minimal=hızlı)
 }
 
 export function hasAiKey(): boolean {
@@ -38,8 +39,8 @@ async function openrouterGenerate(opts: GenOptions): Promise<string | null> {
         { role: "user", content: opts.user },
       ],
       temperature: opts.temperature ?? 0.4,
-      // gpt-5 reasoning modellerini hızlandırır (70s -> ~2s); reasoning olmayan modeller yok sayar
-      reasoning: { effort: "minimal" },
+      // gpt-5 reasoning modellerini hızlandırır; reasoning olmayan modeller yok sayar
+      reasoning: { effort: opts.effort ?? "minimal" },
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });

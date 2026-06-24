@@ -38,6 +38,8 @@ function actionsNote(actions: ChatAction[]): string | undefined {
   return parts.length ? parts.join(" · ") : undefined;
 }
 
+const QUICK = ["Su içtim", "Spor yaptım", "Bugün nasıl gidiyor?", "Kaç kalori kaldı?", "Yarın hatırlat: "];
+
 export default function Chat({
   userId,
   entries,
@@ -56,6 +58,7 @@ export default function Chat({
   const [busy, setBusy] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const key = `duzen.chat.${userId}`;
 
   useEffect(() => {
@@ -215,10 +218,21 @@ export default function Chat({
               Bana gününü anlat, soru sor ya da işini söyle — gerisini ben hallederim:
             </p>
             <div className="mt-3 space-y-1.5 text-left text-sm">
-              <Example t="Bugün 45 dk koştum ve kafam biraz dağınık" />
-              <Example t="Raporu bitirdim" />
-              <Example t="Bu hafta kaç kez spor yaptım?" />
-              <Example t="Yarın su içmeyi hatırlat" />
+              {[
+                "Bugün 45 dk koştum ve kafam biraz dağınık",
+                "Raporu bitirdim",
+                "Bu hafta kaç kez spor yaptım?",
+                "Yarın su içmeyi hatırlat",
+              ].map((t) => (
+                <Example
+                  key={t}
+                  t={t}
+                  onPick={(x) => {
+                    setInput(x);
+                    inputRef.current?.focus();
+                  }}
+                />
+              ))}
             </div>
           </div>
         ) : (
@@ -247,8 +261,23 @@ export default function Chat({
             Sohbeti temizle
           </button>
         )}
+        <div className="mb-2 flex gap-1.5 overflow-x-auto pb-0.5">
+          {QUICK.map((q) => (
+            <button
+              key={q}
+              onClick={() => {
+                setInput(q);
+                inputRef.current?.focus();
+              }}
+              className="shrink-0 rounded-full border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-xs text-[var(--muted)] transition active:scale-95"
+            >
+              {q}
+            </button>
+          ))}
+        </div>
         <div className="flex items-end gap-2 rounded-3xl border border-[var(--border)] bg-[var(--card)] p-2 shadow-lg">
           <textarea
+            ref={inputRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -309,10 +338,13 @@ function Bubble({ m }: { m: Msg }) {
   );
 }
 
-function Example({ t }: { t: string }) {
+function Example({ t, onPick }: { t: string; onPick: (t: string) => void }) {
   return (
-    <div className="rounded-xl bg-[var(--background)] px-3 py-1.5 text-[var(--muted)] ring-1 ring-[var(--border)]">
+    <button
+      onClick={() => onPick(t)}
+      className="block w-full rounded-xl bg-[var(--background)] px-3 py-1.5 text-left text-[var(--muted)] ring-1 ring-[var(--border)] transition active:scale-[0.99]"
+    >
       “{t}”
-    </div>
+    </button>
   );
 }
