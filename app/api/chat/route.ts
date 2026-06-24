@@ -225,8 +225,14 @@ function buildUserContent(
     .slice(-8)
     .map((m) => (m.role === "user" ? "Kullanıcı: " : "Asistan: ") + m.text)
     .join("\n");
+  const WD = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+  let gun = "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(today)) {
+    const d = new Date(today + "T12:00:00Z");
+    if (!Number.isNaN(d.getTime())) gun = WD[d.getUTCDay()];
+  }
   return [
-    `Bugünün tarihi: ${today}.${now ? ` Şu anki yerel tarih-saat: ${now}.` : ""}`,
+    `Bugünün tarihi: ${today}${gun ? ` (${gun})` : ""}.${now ? ` Şu anki yerel tarih-saat: ${now}.` : ""} (Gün adından göreli günleri hesapla: ör. bugün Çarşamba ise "cuma" 2 gün sonradır.)`,
     "",
     "Mevcut kayıtların (JSON, id dahil):",
     JSON.stringify(compact(entries)),
