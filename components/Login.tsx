@@ -14,7 +14,6 @@ function tr(msg?: string): string {
 }
 
 export default function Login() {
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
@@ -32,18 +31,9 @@ export default function Login() {
     setError(null);
     setNotice(null);
     try {
-      if (mode === "signin") {
-        const { error } = await supabase.auth.signInWithPassword({ email: e, password });
-        if (error) throw error;
-        // başarılı: oturumu page.tsx'teki onAuthStateChange devralır
-      } else {
-        const { data, error } = await supabase.auth.signUp({ email: e, password });
-        if (error) throw error;
-        if (!data.session) {
-          setNotice("Hesap oluşturuldu. E-postandaki onay bağlantısına tıkladıktan sonra 'Giriş yap' ile gir.");
-          setMode("signin");
-        }
-      }
+      const { error } = await supabase.auth.signInWithPassword({ email: e, password });
+      if (error) throw error;
+      // başarılı: oturumu page.tsx'teki onAuthStateChange devralır
     } catch (err) {
       setError(tr(err instanceof Error ? err.message : undefined));
     } finally {
@@ -79,28 +69,7 @@ export default function Login() {
       </div>
 
       <div className="rounded-3xl border border-[var(--border)] bg-[var(--card)] p-6 shadow-sm">
-        <div className="mb-4 flex rounded-full bg-[var(--background)] p-1 ring-1 ring-[var(--border)]">
-          {(
-            [
-              ["signin", "Giriş yap"],
-              ["signup", "Kayıt ol"],
-            ] as const
-          ).map(([m, l]) => (
-            <button
-              key={m}
-              onClick={() => {
-                setMode(m);
-                setError(null);
-                setNotice(null);
-              }}
-              className={`flex-1 rounded-full py-1.5 text-sm font-medium transition ${
-                mode === m ? "bg-indigo-500 text-white" : "text-[var(--muted)]"
-              }`}
-            >
-              {l}
-            </button>
-          ))}
-        </div>
+        <h2 className="mb-4 text-lg font-bold">Giriş yap</h2>
 
         <label className="mb-1 block text-sm font-medium text-[var(--muted)]">E-posta</label>
         <input
@@ -116,7 +85,7 @@ export default function Login() {
         <label className="mb-1 block text-sm font-medium text-[var(--muted)]">Şifre</label>
         <input
           type="password"
-          autoComplete={mode === "signin" ? "current-password" : "new-password"}
+          autoComplete="current-password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && submit()}
@@ -129,7 +98,7 @@ export default function Login() {
           disabled={busy || !email.trim() || !password}
           className="mt-4 w-full rounded-2xl bg-indigo-500 py-3 font-medium text-white transition active:scale-[0.99] disabled:opacity-40"
         >
-          {busy ? "…" : mode === "signin" ? "Giriş yap" : "Kayıt ol"}
+          {busy ? "…" : "Giriş yap"}
         </button>
 
         <button
