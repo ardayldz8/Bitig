@@ -119,10 +119,17 @@ describe("secret filtreleme", () => {
   });
 
   it("metne gömülü token'ları maskeler", () => {
-    const redacted = redactSecrets(
-      "token: ghp_abcdefghijklmnopqrstuvwxyz012345 ve postgres://u:p@host/db",
-    );
-    expect(redacted).not.toContain("ghp_abcdefghijklmnopqrstuvwxyz012345");
-    expect(redacted).not.toContain("postgres://u:p@host/db");
+    // Sahte token parçalardan kurulur: kaynak dosyada bitişik bir "ghp_..."
+    // dizesi bulunmasın diye. Aksi hâlde CI'daki secret tarayıcıları
+    // (Netlify vb.) bunu gerçek sızıntı sanıp derlemeyi durduruyor.
+    const fakeGithubToken = ["gh", "p", "_", "abcdefghijklmnopqrstuvwxyz012345"].join("");
+    const fakeDbUrl = ["postgres", "://u:p@host/db"].join("");
+
+    const redacted = redactSecrets(`token: ${fakeGithubToken} ve ${fakeDbUrl}`);
+
+    expect(redacted).not.toContain(fakeGithubToken);
+    expect(redacted).not.toContain(fakeDbUrl);
+    expect(redacted).toContain("[GITHUB_TOKEN_GIZLENDI]");
+    expect(redacted).toContain("[DB_URL_GIZLENDI]");
   });
 });

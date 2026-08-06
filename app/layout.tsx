@@ -3,7 +3,15 @@ import PwaRegister from "@/components/ui/pwa-register";
 import SiteNav from "@/components/ui/site-nav";
 import "./globals.css";
 
+/**
+ * OG/Twitter görsellerinin mutlak adrese çözülmesi için taban URL.
+ * Netlify derlemede `URL` değişkenini sağlar; yerelde localhost'a düşer.
+ */
+const siteUrl =
+  process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? "http://localhost:3000";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(siteUrl),
   title: {
     default: "Bitig",
     template: "%s — Bitig",

@@ -1,0 +1,22 @@
+# Netlify yapılandırması repoda tutulur — panel ayarlarına bağlı kalmasın.
+
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Next.js App Router, route handler'lar ve görsel optimizasyonu için resmî eklenti
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+
+# Servis worker her zaman ağdan doğrulanmalı; yoksa eski sürüm takılı kalır
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/manifest.webmanifest"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
