@@ -149,6 +149,12 @@ export async function fetchProjectsBundle(
       .limit(300),
   ]);
 
+  // Alt sorgular sessizce boş dönmesin: hata yüzünden "0 özellik" göstermek,
+  // gerçekten 0 özellik olmasıyla aynı şey değil.
+  for (const result of [features, notes, tasks, activities]) {
+    if (result.error) throw new Error(result.error.message);
+  }
+
   return {
     projects,
     features: (features.data ?? []).map(rowToFeature),

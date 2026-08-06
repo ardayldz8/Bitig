@@ -129,8 +129,18 @@ export function useProjects(): ProjectsApi {
         setState(bundle);
         setError(null);
       }
-    } catch {
-      if (mountedRef.current) setError("Proje verileri yüklenemedi.");
+    } catch (caught) {
+      // Supabase'in kendi mesajı korunur. "Tablo yok", "izin yok" ve "ağ
+      // hatası" bambaşka sorunlar; üçünü tek cümleye indirmek nedeni
+      // kullanıcıdan da geliştiriciden de gizliyor.
+      if (mountedRef.current) {
+        const detail = caught instanceof Error ? caught.message.trim() : "";
+        setError(
+          detail
+            ? `Proje verileri yüklenemedi: ${detail}`
+            : "Proje verileri yüklenemedi.",
+        );
+      }
     }
   }, [session]);
 
