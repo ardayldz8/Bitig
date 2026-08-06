@@ -1,13 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { initialMangas } from "@/lib/manga";
-import { readStoredMangas } from "@/lib/storage";
-import { readEntries, readTargets } from "@/lib/calorie/storage";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { useAuth } from "@/components/auth/auth-provider";
+import { rowToManga, rowToMediaEntry, rowToFoodEntry, rowToTargets, type Row } from "@/lib/cloud/mappers";
 import { dateKey, entriesForDate, sumTotals } from "@/lib/calorie/totals";
-import { createInitialEntries, readMediaEntries } from "@/lib/media/storage";
-import { createSeedState, readProjectsState } from "@/lib/projects/store";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { defaultTargets } from "@/types/calorie";
 import type {
   DashboardData,
   DashboardRecentItem,
@@ -23,165 +21,232 @@ const EMPTY: DashboardData = {
 };
 
 /** Bir modülün okuması patlarsa yalnızca o modül "error" olur. */
-function safe<T>(read: () => ModuleResult<T>, message: string): ModuleResult<T> {
+async function safe<T>(
+  read: () => Promise<ModuleResult<T>>,
+  message: string,
+): Promise<ModuleResult<T>> {
   try {
-    return read();
+    return await read();
   } catch {
     return { state: "error", message };
   }
 }
 
+/** Sorgu hatası sessizce boş liste dönmesin — modül "error" olarak işaretlensin. */
+function unwrap(result: { data: unknown; error: { message: string } | null }): Row[] {
+  if (result.error) throw new Error(result.error.message);
+  return Array.isArray(result.data) ? (result.data as Row[]) : [];
+}
+
 /**
  * Ana sayfa veri adaptörü.
  *
- * Hiçbir yeni localStorage anahtarı TANIMLAMAZ — her modülün kendi
- * storage katmanından export edilen okuma fonksiyonlarını kullanır.
- * Veriler yalnızca mount sonrası okunur → hydration uyuşmazlığı olmaz.
+ * Veriler artık her modülün kendi tablosundan okunur. Hiçbir modül için ayrı
+ * bir "son durum" tablosu tutulmaz; özet, asıl kayıtlardan türetilir.
  */
 export function useDashboardData(): { data: DashboardData; loading: boolean } {
+  const { client, userId, status } = useAuth();
   const [data, setData] = useState<DashboardData>(EMPTY);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const recent: DashboardRecentItem[] = [];
+    if (status !== "signed_in" || !client || !userId) {
+      setData(EMPTY);
+      setLoading(status === "loading");
+      return;
+    }
 
-    // --- Manga (lib/storage.ts) ---
-    const manga = safe<{ title: string; currentChapter: number }>(() => {
-      const list = readStoredMangas() ?? initialMangas;
-      // Manga tipinde updatedAt yok; yeni kayıtlar başa eklendiği için
-      // dizi sırası "en son" için tek dürüst göstergedir.
-      const current = list.find((item) => item.status === "reading");
-      if (!current) return { state: "empty" };
+    let cancelled = false;
 
-      recent.push({
-        id: `manga-${current.id}`,
-        module: "manga",
-        title: current.name,
-        subtitle: `${current.currentChapter}. bölüm`,
-        href: "/manga",
-        updatedAt: null, // gerçek zaman bilgisi yok → saat gösterilmez
-      });
+    async function load(supabase: SupabaseClient, uid: string) {
+      const recent: DashboardRecentItem[] = [];
 
-      return {
-        state: "ok",
-        data: { title: current.name, currentChapter: current.currentChapter },
-      };
-    }, "Manga bilgisi yüklenemedi");
+      // --- Manga ---
+      const manga = await safe<{ title: string; currentChapter: number }>(async () => {
+        const rows = unwrap(
+          await supabase
+            .from("mangas")
+            .select("*")
+            .eq("user_id", uid)
+            .eq("status", "reading")
+            .order("updated_at", { ascending: false })
+            .limit(1),
+        );
 
-    // --- Kalori (lib/calorie/storage.ts + totals.ts) ---
-    const calorie = safe<{ consumed: number; target: number }>(() => {
-      const today = dateKey(new Date());
-      const todays = entriesForDate(readEntries(), today);
-      const targets = readTargets();
+        const current = rows.map(rowToManga).find((item) => item !== null);
+        if (!current) return { state: "empty" };
 
-      if (todays.length === 0) return { state: "empty" };
-      return {
-        state: "ok",
-        data: { consumed: sumTotals(todays).calories, target: targets.calories },
-      };
-    }, "Bugünkü kalori bilgisi alınamadı");
+        recent.push({
+          id: `manga-${current.id}`,
+          module: "manga",
+          title: current.name,
+          subtitle: `${current.currentChapter}. bölüm`,
+          href: "/manga",
+          updatedAt: typeof rows[0].updated_at === "string" ? rows[0].updated_at : null,
+        });
 
-    // --- Dizi / Film (lib/media/storage.ts) ---
-    const media = safe<{
-      title: string;
-      mediaType: "series" | "movie";
-      currentSeason: number | null;
-      currentEpisode: number | null;
-    }>(() => {
-      const list = readMediaEntries() ?? createInitialEntries();
-      const byRecent = [...list].sort((a, b) =>
-        (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
-      );
-      // Önce izlenen, yoksa planlanan
-      const current =
-        byRecent.find((item) => item.status === "watching") ??
-        byRecent.find((item) => item.status === "planned");
-      if (!current) return { state: "empty" };
+        return {
+          state: "ok",
+          data: { title: current.name, currentChapter: current.currentChapter },
+        };
+      }, "Manga bilgisi yüklenemedi");
 
-      const position =
-        current.mediaType === "series" && current.currentSeason !== null
-          ? `${current.currentSeason}. Sezon ${current.currentEpisode ?? 1}. Bölüm`
-          : "Film";
+      // --- Kalori ---
+      const calorie = await safe<{ consumed: number; target: number }>(async () => {
+        const today = dateKey(new Date());
 
-      recent.push({
-        id: `media-${current.id}`,
-        module: "media",
-        title: current.title,
-        subtitle: position,
-        href: "/dizi-film",
-        updatedAt: current.updatedAt ?? null,
-      });
+        // Gün sınırı kullanıcının saat dilimine göre; sorguyu geniş tutup
+        // filtrelemeyi mevcut yardımcıya bırakmak sapma üretmez.
+        const dayStart = new Date(`${today}T00:00:00`);
+        const dayEnd = new Date(dayStart.getTime() + 36 * 60 * 60 * 1000);
 
-      return {
-        state: "ok",
-        data: {
+        const [entryResult, targetResult] = await Promise.all([
+          supabase
+            .from("food_entries")
+            .select("*")
+            .eq("user_id", uid)
+            .gte("consumed_at", new Date(dayStart.getTime() - 12 * 60 * 60 * 1000).toISOString())
+            .lte("consumed_at", dayEnd.toISOString()),
+          supabase.from("nutrition_targets").select("*").eq("user_id", uid).maybeSingle(),
+        ]);
+
+        const entries = unwrap(entryResult)
+          .map(rowToFoodEntry)
+          .filter((entry) => entry !== null);
+        const todays = entriesForDate(entries, today);
+        if (todays.length === 0) return { state: "empty" };
+
+        if (targetResult.error) throw new Error(targetResult.error.message);
+        const targets = targetResult.data
+          ? (rowToTargets(targetResult.data as Row) ?? defaultTargets)
+          : defaultTargets;
+
+        return {
+          state: "ok",
+          data: { consumed: sumTotals(todays).calories, target: targets.calories },
+        };
+      }, "Bugünkü kalori bilgisi alınamadı");
+
+      // --- Dizi / Film ---
+      const media = await safe<{
+        title: string;
+        mediaType: "series" | "movie";
+        currentSeason: number | null;
+        currentEpisode: number | null;
+      }>(async () => {
+        const rows = unwrap(
+          await supabase
+            .from("media_entries")
+            .select("*")
+            .eq("user_id", uid)
+            .in("status", ["watching", "planned"])
+            .order("updated_at", { ascending: false }),
+        );
+
+        const list = rows.map(rowToMediaEntry).filter((item) => item !== null);
+        // Önce izlenen, yoksa planlanan
+        const current =
+          list.find((item) => item.status === "watching") ??
+          list.find((item) => item.status === "planned");
+        if (!current) return { state: "empty" };
+
+        const position =
+          current.mediaType === "series" && current.currentSeason !== null
+            ? `${current.currentSeason}. Sezon ${current.currentEpisode ?? 1}. Bölüm`
+            : "Film";
+
+        recent.push({
+          id: `media-${current.id}`,
+          module: "media",
           title: current.title,
-          mediaType: current.mediaType,
-          currentSeason: current.currentSeason,
-          currentEpisode: current.currentEpisode,
-        },
-      };
-    }, "Dizi / film bilgisi yüklenemedi");
+          subtitle: position,
+          href: "/dizi-film",
+          updatedAt: current.updatedAt,
+        });
 
-    // --- Projeler (lib/projects/store.ts) ---
-    const projects = safe<{
-      id: string;
-      name: string;
-      status: string;
-      updatedAt: string | null;
-      ciStatus: "success" | "failure" | "pending" | null;
-      openIssues: number | null;
-    }>(() => {
-      // Supabase yapılandırılmışsa veriler oturuma bağlıdır; ana sayfa
-      // oturum açmaz ve GitHub/Supabase çağrısı YAPMAZ.
-      if (isSupabaseConfigured()) {
-        return { state: "empty" };
-      }
+        return {
+          state: "ok",
+          data: {
+            title: current.title,
+            mediaType: current.mediaType,
+            currentSeason: current.currentSeason,
+            currentEpisode: current.currentEpisode,
+          },
+        };
+      }, "Dizi / film bilgisi yüklenemedi");
 
-      const stored = readProjectsState() ?? createSeedState();
-      const byRecent = [...stored.projects].sort((a, b) =>
-        (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""),
-      );
-      const current =
-        byRecent.find((item) => item.status === "active") ?? byRecent[0] ?? null;
-      if (!current) return { state: "empty" };
+      // --- Projeler ---
+      const projects = await safe<{
+        id: string;
+        name: string;
+        status: string;
+        updatedAt: string | null;
+        ciStatus: "success" | "failure" | "pending" | null;
+        openIssues: number | null;
+      }>(async () => {
+        const rows = unwrap(
+          await supabase
+            .from("projects")
+            .select("id, name, status, updated_at")
+            .eq("user_id", uid)
+            .order("updated_at", { ascending: false })
+            .limit(10),
+        );
 
-      recent.push({
-        id: `project-${current.id}`,
-        module: "projects",
-        title: current.name,
-        subtitle: "Son güncelleme yapıldı",
-        href: `/projeler?project=${encodeURIComponent(current.id)}`,
-        updatedAt: current.updatedAt ?? null,
-      });
+        const current =
+          rows.find((row) => row.status === "active") ?? rows[0] ?? null;
+        if (!current || typeof current.id !== "string" || typeof current.name !== "string") {
+          return { state: "empty" };
+        }
 
-      return {
-        state: "ok",
-        data: {
-          id: current.id,
-          name: current.name,
-          status: current.status,
-          updatedAt: current.updatedAt ?? null,
-          // Ana sayfada GitHub çağrısı yapılmadığı için CI durumu bilinmez
-          ciStatus: null,
-          openIssues: null,
-        },
-      };
-    }, "Proje bilgisi şu anda kullanılamıyor");
+        const updatedAt =
+          typeof current.updated_at === "string" ? current.updated_at : null;
 
-    // Zamanı bilinenler önce, en yeni en üstte; zamansızlar sona
-    const recentItems = recent
-      .sort((a, b) => {
-        if (a.updatedAt && b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
-        if (a.updatedAt) return -1;
-        if (b.updatedAt) return 1;
-        return 0;
-      })
-      .slice(0, 3);
+        recent.push({
+          id: `project-${current.id}`,
+          module: "projects",
+          title: current.name,
+          subtitle: "Son güncelleme yapıldı",
+          href: `/projeler?project=${encodeURIComponent(current.id)}`,
+          updatedAt,
+        });
 
-    setData({ manga, calorie, media, projects, recentItems });
-    setLoading(false);
-  }, []);
+        return {
+          state: "ok",
+          data: {
+            id: current.id,
+            name: current.name,
+            status: typeof current.status === "string" ? current.status : "active",
+            updatedAt,
+            // Ana sayfa GitHub çağrısı yapmaz; CI durumu ve issue sayısı bilinmez
+            ciStatus: null,
+            openIssues: null,
+          },
+        };
+      }, "Proje bilgisi şu anda kullanılamıyor");
+
+      if (cancelled) return;
+
+      // Zamanı bilinenler önce, en yeni en üstte; zamansızlar sona
+      const recentItems = recent
+        .sort((a, b) => {
+          if (a.updatedAt && b.updatedAt) return b.updatedAt.localeCompare(a.updatedAt);
+          if (a.updatedAt) return -1;
+          if (b.updatedAt) return 1;
+          return 0;
+        })
+        .slice(0, 3);
+
+      setData({ manga, calorie, media, projects, recentItems });
+      setLoading(false);
+    }
+
+    void load(client, userId);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [client, userId, status]);
 
   return { data, loading };
 }

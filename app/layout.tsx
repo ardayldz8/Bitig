@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
+import AuthGate from "@/components/auth/auth-gate";
+import AuthProvider from "@/components/auth/auth-provider";
 import PwaRegister from "@/components/ui/pwa-register";
-import SiteNav from "@/components/ui/site-nav";
 import "./globals.css";
 
 /**
@@ -64,8 +65,9 @@ export default function RootLayout({
         yüksekliği ayrılır, yoksa sayfanın son satırı çubuğun arkasında kalır.
       */}
       <body className="min-h-dvh pt-[env(safe-area-inset-top)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] antialiased sm:pt-0 sm:pb-0">
-        <SiteNav />
-        {children}
+        <AuthProvider>
+          <AuthGate>{children}</AuthGate>
+        </AuthProvider>
         <PwaRegister />
       </body>
     </html>

@@ -2,17 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session, SupabaseClient } from "@supabase/supabase-js";
+import { useAuth } from "@/components/auth/auth-provider";
 import {
   EMPTY_STATE,
   createId,
-  createSeedState,
-  readProjectsState,
-  writeProjectsState,
+
   type ProjectsState,
 } from "@/lib/projects/store";
 import { fetchProjectsBundle } from "@/lib/projects/queries";
 import * as db from "@/lib/projects/mutations";
-import { getBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type {
   Project,
   ProjectActivity,
@@ -43,8 +41,6 @@ export type ProjectsApi = ProjectsState & {
   accessToken: string | null;
   error: string | null;
 
-  signIn: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 
   createProject: (input: ProjectInput) => Promise<Project | null>;
@@ -71,6 +67,7 @@ export type ProjectsApi = ProjectsState & {
 const now = () => new Date().toISOString();
 
 export function useProjects(): ProjectsApi {
+  const auth = useAuth();
   const [state, setState] = useState<ProjectsState>(EMPTY_STATE);
   const [mode, setMode] = useState<StorageMode>("loading");
   const [session, setSession] = useState<Session | null>(null);
@@ -87,38 +84,27 @@ export function useProjects(): ProjectsApi {
     };
   }, []);
 
-  // Mount sonrası: yapılandırma + oturum durumunu belirle (hydration güvenli)
+  // Oturum artık AuthProvider'da tek yerden yönetiliyor; bu hook onu tüketir.
+  // Giriş duvarı sayesinde buraya yalnızca oturum açıkken gelinir, bu yüzden
+  // "yerel mod" ve "giriş gerekli" durumları burada ele alınmaz.
   useEffect(() => {
-    if (!isSupabaseConfigured()) {
-      setState(readProjectsState() ?? createSeedState());
-      setMode("local");
+    clientRef.current = auth.client;
+
+    if (auth.status === "loading") {
+      setMode("loading");
+      return;
+    }
+
+    if (auth.status !== "signed_in") {
+      setMode("needs_auth");
       setHydrated(true);
       return;
     }
 
-    const client = getBrowserClient();
-    clientRef.current = client;
-    if (!client) {
-      setMode("local");
-      setHydrated(true);
-      return;
-    }
-
-    client.auth.getSession().then(({ data }) => {
-      if (!mountedRef.current) return;
-      setSession(data.session);
-      setMode(data.session ? "cloud" : "needs_auth");
-      setHydrated(true);
-    });
-
-    const { data: sub } = client.auth.onAuthStateChange((_event, next) => {
-      if (!mountedRef.current) return;
-      setSession(next);
-      setMode(next ? "cloud" : "needs_auth");
-    });
-
-    return () => sub.subscription.unsubscribe();
-  }, []);
+    setSession(auth.session);
+    setMode("cloud");
+    setHydrated(true);
+  }, [auth.client, auth.status, auth.session]);
 
   const reload = useCallback(async () => {
     const client = clientRef.current;
@@ -170,11 +156,8 @@ export function useProjects(): ProjectsApi {
     };
   }, [mode, session, reload]);
 
-  // Yerel modda her değişiklik localStorage'a yazılır
-  useEffect(() => {
-    if (mode !== "local" || !hydrated) return;
-    writeProjectsState(state);
-  }, [state, mode, hydrated]);
+  // Yerel mod kaldırıldı (giriş zorunlu). writeProjectsState yalnızca içe
+  // aktarma akışının eski kaydı temizlemesi için duruyor.
 
   const isCloud = mode === "cloud";
   const client = clientRef.current;
@@ -198,26 +181,12 @@ export function useProjects(): ProjectsApi {
     [isCloud, client, userId, reload],
   );
 
-  // --- Kimlik doğrulama ---
-
-  const signIn = useCallback(async (email: string, password: string) => {
-    const supabase = clientRef.current;
-    if (!supabase) return "Supabase yapılandırılmamış.";
-    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
-    return authError ? authError.message : null;
-  }, []);
-
-  const signUp = useCallback(async (email: string, password: string) => {
-    const supabase = clientRef.current;
-    if (!supabase) return "Supabase yapılandırılmamış.";
-    const { error: authError } = await supabase.auth.signUp({ email, password });
-    return authError ? authError.message : null;
-  }, []);
-
+  // Kimlik doğrulama AuthProvider'a taşındı; buradaki signIn/signUp kopyaları
+  // kaldırıldı. signOut sarmalayıcı kalıyor: çıkarken ekrandaki veri de silinsin.
   const signOut = useCallback(async () => {
-    await clientRef.current?.auth.signOut();
+    await auth.signOut();
     setState(EMPTY_STATE);
-  }, []);
+  }, [auth]);
 
   // --- Projeler ---
 
@@ -592,8 +561,6 @@ export function useProjects(): ProjectsApi {
     userEmail: session?.user?.email ?? null,
     accessToken: session?.access_token ?? null,
     error,
-    signIn,
-    signUp,
     signOut,
     createProject,
     updateProject,

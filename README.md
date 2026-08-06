@@ -4,8 +4,9 @@
   <p>Manga, kalori, dizi/film ve yazılım projelerini tek yerden takip et.</p>
 </div>
 
-Kişisel takip uygulaması. Kurulabilir bir PWA olarak çalışır; verilerin
-varsayılan olarak tarayıcında kalır, istersen Supabase'e bağlanır.
+Kişisel takip uygulaması. Kurulabilir bir PWA olarak çalışır. Giriş yapmadan
+hiçbir sayfa açılmaz; tüm veriler hesabına bağlı olarak Supabase'de saklanır ve
+cihazlar arasında senkron olur.
 
 ## Sayfalar
 
@@ -30,9 +31,14 @@ cp .env.local.example .env.local   # değerleri doldur (hepsi opsiyonel)
 npm run dev
 ```
 
-`http://localhost:3000` adresinde açılır. **Hiçbir ortam değişkeni olmadan da
-çalışır** — yapılandırılmamış entegrasyonlar devre dışı kalır ve arayüzde
-kurulum uyarısı gösterilir.
+`http://localhost:3000` adresinde açılır. **Supabase değişkenleri zorunludur** —
+uygulama verileri hesaba bağlı tuttuğu için onlarsız açılmaz ve kurulum uyarısı
+gösterir. Diğer entegrasyonlar opsiyoneldir; eksik olan sessizce devre dışı kalır.
+
+Google ile giriş için Supabase panelinde Authentication → Providers → Google
+açılmalı ve Authentication → URL Configuration altındaki Redirect URLs listesine
+uygulamanın adresi eklenmelidir. Sağlayıcı kapalıyken e-posta/şifre ile giriş
+çalışmaya devam eder.
 
 | Komut | Ne yapar |
 |---|---|
@@ -43,11 +49,11 @@ kurulum uyarısı gösterilir.
 
 ## Ortam değişkenleri
 
-Tümü opsiyonel; eksik olan entegrasyon sessizce devre dışı kalır.
+Supabase dışındakiler opsiyonel; eksik olan entegrasyon sessizce devre dışı kalır.
 
 | Değişken | Olmazsa ne olur |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Projeler sayfası yerel modda çalışır (localStorage) |
+| `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` | **Zorunlu** — uygulama açılmaz, kurulum uyarısı gösterilir |
 | `SUPABASE_SERVICE_ROLE_KEY` | GitHub webhook'u veritabanına yazamaz |
 | `OPENROUTER_API_KEY` | Fotoğraf analizi ve AI asistan kapalı |
 | `GITHUB_APP_*`, `GITHUB_WEBHOOK_SECRET` | GitHub entegrasyonu kapalı |
@@ -66,6 +72,13 @@ Bu projede birkaç kural bilinçli olarak katı tutuldu:
   bayrağı gerektirir ve bu bayrak yalnızca kullanıcının onay diyaloğundan gelir.
 - **Uydurma ilerleme yok.** Sezon başına bölüm dağılımı bilinmediğinde yüzde
   gösterilmez; `updatedAt` olmayan kayıtta saat gösterilmez.
+- **Giriş yapılmadan hiçbir şey render edilmez.** Sayfa içeriği gizlenmez,
+  hiç çizilmez; navbar da öyle. Depoda saklanan oturum jetonu `getUser()` ile
+  sunucuda doğrulanır — silinmiş hesabın jetonu süresi dolana kadar duvarı
+  geçmesin diye.
+- **Yerel veri sessizce yok sayılmaz.** Buluta geçişten önce tarayıcıda
+  kaydedilmiş manga/kalori/dizi kayıtları için bir kez aktarım teklif edilir.
+  Bulutta zaten kayıt varsa o modül atlanır ve yereldeki veri silinmez.
 - **GitHub kurulumunun sahibi var.** `installation_id` gizli değildir; bu yüzden
   repo okuma, senkronizasyon ve issue uçları kurulumun isteği yapan kullanıcıya
   ait olduğunu RLS üzerinden doğrular. Doğrulanmamış istek 401/403 alır.

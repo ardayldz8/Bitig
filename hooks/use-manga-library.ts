@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { createMangaId, initialMangas } from "@/lib/manga";
-import { readStoredMangas, writeStoredMangas } from "@/lib/storage";
+import { useCallback } from "react";
+import { useCloudCollection } from "@/hooks/use-cloud-collection";
+import { mangaToRow, rowToManga } from "@/lib/cloud/mappers";
+import { createId } from "@/lib/ids";
 import type { Manga, MangaDraft } from "@/types/manga";
 
 export type MangaLibrary = {
   mangas: Manga[];
-  /** localStorage okunana kadar false — kaydedilmiş veriyi ezmemek için kullanılır. */
+  /** İlk yükleme bitene kadar false. */
   hydrated: boolean;
+  error: string | null;
   addManga: (draft: MangaDraft) => void;
   updateManga: (id: string, draft: MangaDraft) => void;
   removeManga: (id: string) => void;
@@ -16,44 +18,83 @@ export type MangaLibrary = {
 };
 
 export function useMangaLibrary(): MangaLibrary {
-  // Sunucu ve ilk istemci render'ı aynı veriyle çalışır → hydration uyuşmazlığı olmaz.
-  const [mangas, setMangas] = useState<Manga[]>(initialMangas);
-  const [hydrated, setHydrated] = useState(false);
+  const collection = useCloudCollection<Manga>({
+    table: "mangas",
+    orderColumn: "created_at",
+    toItem: rowToManga,
+  });
 
-  useEffect(() => {
-    const stored = readStoredMangas();
-    if (stored) setMangas(stored);
-    setHydrated(true);
-  }, []);
+  const { mutate } = collection;
 
-  useEffect(() => {
-    if (!hydrated) return;
-    writeStoredMangas(mangas);
-  }, [mangas, hydrated]);
+  const addManga = useCallback(
+    (draft: MangaDraft) => {
+      const manga: Manga = { ...draft, id: createId() };
+      mutate(
+        (previous) => [manga, ...previous],
+        (client, userId) => client.from("mangas").insert(mangaToRow(manga, userId)),
+        "Manga eklenemedi",
+      );
+    },
+    [mutate],
+  );
 
-  const addManga = useCallback((draft: MangaDraft) => {
-    setMangas((prev) => [{ ...draft, id: createMangaId(draft.name, prev) }, ...prev]);
-  }, []);
+  const updateManga = useCallback(
+    (id: string, draft: MangaDraft) => {
+      mutate(
+        (previous) =>
+          previous.map((manga) => (manga.id === id ? { ...manga, ...draft } : manga)),
+        (client, userId) =>
+          client
+            .from("mangas")
+            .update(mangaToRow({ ...draft, id }, userId))
+            .eq("id", id),
+        "Manga güncellenemedi",
+      );
+    },
+    [mutate],
+  );
 
-  const updateManga = useCallback((id: string, draft: MangaDraft) => {
-    setMangas((prev) =>
-      prev.map((manga) => (manga.id === id ? { ...manga, ...draft } : manga)),
-    );
-  }, []);
+  const removeManga = useCallback(
+    (id: string) => {
+      mutate(
+        (previous) => previous.filter((manga) => manga.id !== id),
+        (client) => client.from("mangas").delete().eq("id", id),
+        "Manga silinemedi",
+      );
+    },
+    [mutate],
+  );
 
-  const removeManga = useCallback((id: string) => {
-    setMangas((prev) => prev.filter((manga) => manga.id !== id));
-  }, []);
+  const changeChapter = useCallback(
+    (id: string, delta: number) => {
+      mutate(
+        (previous) =>
+          previous.map((manga) =>
+            manga.id === id
+              ? { ...manga, currentChapter: Math.max(0, manga.currentChapter + delta) }
+              : manga,
+          ),
+        // Yazılacak değer, mutate'in verdiği güncel listeden okunur. Hook'un
+        // kendi `items`'ından okunsaydı hızlı ardışık tıklamalarda ikinci
+        // yazma birincinin sonucunu görmez ve aynı değeri tekrar gönderirdi.
+        (client, userId, next) => {
+          const updated = next.find((manga) => manga.id === id);
+          if (!updated) return Promise.resolve({ error: null });
+          return client.from("mangas").update(mangaToRow(updated, userId)).eq("id", id);
+        },
+        "Bölüm güncellenemedi",
+      );
+    },
+    [mutate],
+  );
 
-  const changeChapter = useCallback((id: string, delta: number) => {
-    setMangas((prev) =>
-      prev.map((manga) =>
-        manga.id === id
-          ? { ...manga, currentChapter: Math.max(0, manga.currentChapter + delta) }
-          : manga,
-      ),
-    );
-  }, []);
-
-  return { mangas, hydrated, addManga, updateManga, removeManga, changeChapter };
+  return {
+    mangas: collection.items,
+    hydrated: collection.hydrated,
+    error: collection.error,
+    addManga,
+    updateManga,
+    removeManga,
+    changeChapter,
+  };
 }

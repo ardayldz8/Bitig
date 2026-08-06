@@ -8,41 +8,6 @@ import type {
 
 export const MAX_RATING = 10;
 
-export const initialMangas: Manga[] = [
-  {
-    id: "berserk",
-    name: "Berserk",
-    currentChapter: 376,
-    rating: 10,
-    status: "completed",
-    coverUrl: null,
-  },
-  {
-    id: "vagabond",
-    name: "Vagabond",
-    currentChapter: 327,
-    rating: 9,
-    status: "reading",
-    coverUrl: null,
-  },
-  {
-    id: "one-piece",
-    name: "One Piece",
-    currentChapter: 1124,
-    rating: 9,
-    status: "reading",
-    coverUrl: null,
-  },
-  {
-    id: "kingdom",
-    name: "Kingdom",
-    currentChapter: 812,
-    rating: 8,
-    status: "reading",
-    coverUrl: null,
-  },
-];
-
 export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "recent", label: "Son eklenen" },
   { value: "name", label: "Manga adı" },
@@ -52,22 +17,11 @@ export const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "chapter-asc", label: "En düşük bölüm" },
 ];
 
-const TR_CHAR_MAP: Record<string, string> = {
-  ç: "c",
-  ğ: "g",
-  ı: "i",
-  ö: "o",
-  ş: "s",
-  ü: "u",
-};
-
 /**
- * Karşılaştırma (arama + mükerrer kontrolü) için ad normalleştirme.
+ * Karşılaştırma için ad normalleştirme.
  *
- * toLocaleLowerCase("tr") kullanılmaz: Türkçe kuralında büyük "I" noktasız "ı"ya
- * döner, bu yüzden "PIECE" araması "One Piece" ile eşleşmezdi. Bunun yerine tüm
- * i varyantları (I / İ / ı) tek bir "i"ye indirgenir; diğer harfler için
- * varsayılan toLowerCase zaten doğru sonucu verir (Ç→ç, Ş→ş, Ğ→ğ …).
+ * `[İIı]` önce düz `i`'ye çevrilir: `toLocaleLowerCase("tr")` büyük `I`'yı
+ * noktasız `ı` yapıyor ve "PIECE" araması "One Piece" ile eşleşmiyordu.
  */
 export function normalizeName(name: string): string {
   return name
@@ -75,24 +29,6 @@ export function normalizeName(name: string): string {
     .toLowerCase()
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function slugify(name: string): string {
-  return normalizeName(name)
-    .replace(/[çğıöşü]/g, (char) => TR_CHAR_MAP[char] ?? char)
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-}
-
-/** Ada dayalı, mevcut kayıtlarla çakışmayan deterministik id üretir. */
-export function createMangaId(name: string, existing: Manga[]): string {
-  const base = slugify(name) || "manga";
-  const taken = new Set(existing.map((manga) => manga.id));
-  if (!taken.has(base)) return base;
-
-  let suffix = 2;
-  while (taken.has(`${base}-${suffix}`)) suffix += 1;
-  return `${base}-${suffix}`;
 }
 
 /** Aynı ada sahip başka bir kayıt var mı? (Düzenlemede kendisi hariç tutulur.) */

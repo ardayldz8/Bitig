@@ -79,14 +79,6 @@ export function readEntries(): FoodEntry[] {
   }
 }
 
-export function writeEntries(entries: FoodEntry[]): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(ENTRIES_KEY, JSON.stringify(entries));
-  } catch {
-    // Kota dolu / erişilemez — uygulama çalışmaya devam eder
-  }
-}
 
 export function readTargets(): NutritionTargets {
   if (typeof window === "undefined") return defaultTargets;
@@ -100,11 +92,3 @@ export function readTargets(): NutritionTargets {
   }
 }
 
-export function writeTargets(targets: NutritionTargets): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.setItem(TARGETS_KEY, JSON.stringify(targets));
-  } catch {
-    // yoksay
-  }
-}

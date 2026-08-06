@@ -9,7 +9,6 @@ import GithubConnectModal from "@/components/projects/github-connect-modal";
 import NoteFormModal from "@/components/projects/note-form-modal";
 import ProjectActivityFeed from "@/components/projects/project-activity";
 import ProjectAiAssistant, { type AiStage } from "@/components/projects/project-ai-assistant";
-import ProjectAuth from "@/components/projects/project-auth";
 import ProjectDetail from "@/components/projects/project-detail";
 import ProjectFeatures from "@/components/projects/project-features";
 import ProjectFiles from "@/components/projects/project-files";
@@ -514,11 +513,6 @@ export default function ProjectsPage({
         </p>
       )}
 
-      {/* Supabase bağlı ama oturum yok → veri gösterilmez, giriş istenir */}
-      {library.mode === "needs_auth" ? (
-        <ProjectAuth onSignIn={library.signIn} onSignUp={library.signUp} />
-      ) : (
-        <>
       <div className="mt-6">
         <ProjectStats stats={stats} />
       </div>
@@ -711,9 +705,6 @@ export default function ProjectsPage({
             )}
           </div>
         </div>
-      )}
-
-        </>
       )}
 
       {/* --- Diyaloglar --- */}

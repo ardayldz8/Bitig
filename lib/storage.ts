@@ -49,13 +49,3 @@ export function readStoredMangas(): Manga[] | null {
     return null;
   }
 }
-
-export function writeStoredMangas(mangas: Manga[]): void {
-  if (typeof window === "undefined") return;
-
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(mangas));
-  } catch {
-    // Depolama dolu ya da yazma engelli — uygulama çalışmaya devam etsin
-  }
-}
