@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { BarChart3, Plus } from "lucide-react";
 import AnalysisResult from "@/components/calorie/analysis-result";
 import DailySummary from "@/components/calorie/daily-summary";
@@ -11,6 +11,7 @@ import MealSection from "@/components/calorie/meal-section";
 import NutritionTargetsModal from "@/components/calorie/nutrition-targets-modal";
 import Modal from "@/components/ui/modal";
 import { useCalorieTracker, createId } from "@/hooks/use-calorie-tracker";
+import { useActionParam } from "@/hooks/use-action-param";
 import { useFoodAnalysis } from "@/hooks/use-food-analysis";
 import { checkImageBeforeUpload, prepareImage } from "@/lib/calorie/image";
 import { entriesByMeal, goalProgress, sumTotals } from "@/lib/calorie/totals";
@@ -37,6 +38,19 @@ export default function CaloriePage() {
   const [labelBusy, setLabelBusy] = useState(false);
   const [labelError, setLabelError] = useState<string | null>(null);
   const lastFileRef = useRef<{ file: File; mode: "meal" | "label" } | null>(null);
+  const scannerRef = useRef<HTMLDivElement>(null);
+
+  // Ana sayfadaki "Yemek tara" hızlı işlemi: tarama alanını görünür yap ve odakla
+  const scanAction = useActionParam("scan");
+  useEffect(() => {
+    if (!scanAction.triggered || !tracker.hydrated) return;
+    const node = scannerRef.current;
+    if (!node) return;
+
+    node.scrollIntoView({ behavior: "smooth", block: "center" });
+    node.querySelector<HTMLButtonElement>("button")?.focus();
+    scanAction.clear();
+  }, [scanAction, tracker.hydrated]);
 
   const totals = sumTotals(tracker.dayEntries);
   const calorieProgress = goalProgress(totals.calories, tracker.targets.calories);
@@ -237,7 +251,7 @@ export default function CaloriePage() {
             />
           </div>
 
-          <div className="mt-4">
+          <div ref={scannerRef} className="mt-4">
             <FoodScanner
               stage={analysis.stage}
               error={analysis.error ?? labelError}

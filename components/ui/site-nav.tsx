@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Clapperboard, FolderGit2, Flame } from "lucide-react";
+import { BookOpen, Clapperboard, FolderGit2, Flame, Home } from "lucide-react";
 
 const LINKS = [
-  { href: "/", label: "Manga", Icon: BookOpen },
+  { href: "/", label: "Ana Sayfa", Icon: Home },
+  { href: "/manga", label: "Manga", Icon: BookOpen },
   { href: "/kalori", label: "Kalori", Icon: Flame },
   { href: "/dizi-film", label: "Dizi / Film", Icon: Clapperboard },
   { href: "/projeler", label: "Projeler", Icon: FolderGit2 },

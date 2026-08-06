@@ -1,16 +1,16 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
-import CaloriePage from "@/components/calorie/calorie-page";
+import MangaPage from "@/components/manga/manga-page";
 
 export const metadata: Metadata = {
-  title: "Kalori Takibi — Bitig",
-  description: "Yediklerini takip et, hedeflerine ulaş.",
+  title: "Manga Takibi — Bitig",
+  description: "Okuduklarını takip et, bölümünü unutma.",
 };
 
-export default function Kalori() {
+export default function Manga() {
   return (
     <Suspense fallback={<div className="p-8 text-sm text-ink-soft">Yükleniyor…</div>}>
-      <CaloriePage />
+      <MangaPage />
     </Suspense>
   );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { Plus } from "lucide-react";
 import Modal from "@/components/ui/modal";
 import MediaEmptyState from "@/components/media/media-empty-state";
@@ -10,6 +10,7 @@ import MediaHeader from "@/components/media/media-header";
 import MediaList from "@/components/media/media-list";
 import MediaToolbar from "@/components/media/media-toolbar";
 import { useMediaLibrary, type MediaDraft } from "@/hooks/use-media-library";
+import { useActionParam } from "@/hooks/use-action-param";
 import {
   estimatedEpisodesPerSeason,
   positionLabel,
@@ -41,6 +42,12 @@ export default function MediaPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [dialog, setDialog] = useState<DialogState>({ type: "none" });
+
+  // Ana sayfadaki "Dizi / Film ekle" hızlı işlemi
+  const addAction = useActionParam("add");
+  useEffect(() => {
+    if (addAction.triggered) setDialog({ type: "form", entry: null });
+  }, [addAction.triggered]);
   const [announcement, setAnnouncement] = useState("");
 
   const visibleEntries = useMemo(() => {
@@ -51,7 +58,11 @@ export default function MediaPage() {
   const hasFilters =
     query.trim().length > 0 || statusFilter !== "all" || typeFilter !== "all";
 
-  const closeDialog = () => setDialog({ type: "none" });
+  const clearAction = addAction.clear;
+  const closeDialog = useCallback(() => {
+    setDialog({ type: "none" });
+    clearAction();
+  }, [clearAction]);
 
   const clearFilters = useCallback(() => {
     setQuery("");
@@ -127,7 +138,7 @@ export default function MediaPage() {
       else library.addEntry(draft);
       closeDialog();
     },
-    [dialog, library],
+    [dialog, library, closeDialog],
   );
 
   return (

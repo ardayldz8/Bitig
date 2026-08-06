@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import MediaPage from "@/components/media/media-page";
 
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function DiziFilm() {
-  return <MediaPage />;
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-ink-soft">Yükleniyor…</div>}>
+      <MediaPage />
+    </Suspense>
+  );
 }

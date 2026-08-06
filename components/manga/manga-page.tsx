@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Library, Plus } from "lucide-react";
 import MangaCard from "@/components/manga/manga-card";
 import MangaDeleteDialog from "@/components/manga/manga-delete-dialog";
 import MangaFormModal from "@/components/manga/manga-form-modal";
 import MangaToolbar from "@/components/manga/manga-toolbar";
 import { useMangaLibrary } from "@/hooks/use-manga-library";
+import { useActionParam } from "@/hooks/use-action-param";
 import { searchMangas, sortMangas } from "@/lib/manga";
 import type { Manga, MangaDraft, SortKey } from "@/types/manga";
 
@@ -23,12 +24,21 @@ export default function MangaPage() {
   const [sort, setSort] = useState<SortKey>("recent");
   const [dialog, setDialog] = useState<DialogState>({ type: "none" });
 
+  // Ana sayfadaki "Manga ekle" hızlı işleminden gelindiğinde formu aç
+  const addAction = useActionParam("add");
+  useEffect(() => {
+    if (addAction.triggered) setDialog({ type: "form", manga: null });
+  }, [addAction.triggered]);
+
   const visibleMangas = useMemo(
     () => sortMangas(searchMangas(mangas, query), sort),
     [mangas, query, sort],
   );
 
-  const closeDialog = () => setDialog({ type: "none" });
+  const closeDialog = () => {
+    setDialog({ type: "none" });
+    addAction.clear();
+  };
 
   function handleFormSubmit(draft: MangaDraft) {
     if (dialog.type !== "form") return;

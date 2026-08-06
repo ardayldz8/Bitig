@@ -23,6 +23,7 @@ import ProjectTasks from "@/components/projects/project-tasks";
 import ProjectsHeader from "@/components/projects/projects-header";
 import RepositoryPicker from "@/components/projects/repository-picker";
 import { useProjects } from "@/hooks/use-projects";
+import { useActionParam } from "@/hooks/use-action-param";
 import { computeHealth } from "@/lib/projects/health";
 import { computeMetrics } from "@/lib/projects/metrics";
 import type { FeatureInput, NoteInput, ProjectInput } from "@/lib/projects/validation";
@@ -66,6 +67,16 @@ export default function ProjectsPage({
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<ProjectFilter>("all");
   const [dialog, setDialog] = useState<Dialog>({ type: "none" });
+
+  // Ana sayfadaki "Proje ekle" hızlı işlemi.
+  // Oturum bekleniyorsa form AÇILMAZ — önce giriş yapılmalı, aksi hâlde
+  // kayıt sessizce yerele yazılırdı.
+  const addAction = useActionParam("add");
+  useEffect(() => {
+    if (addAction.triggered && library.mode !== "needs_auth" && library.mode !== "loading") {
+      setDialog({ type: "project", project: null });
+    }
+  }, [addAction.triggered, library.mode]);
   const [draft, setDraft] = useState<DraftPreview | null>(null);
   const [creatingIssue, setCreatingIssue] = useState(false);
 
@@ -436,7 +447,10 @@ export default function ProjectsPage({
     }
   }, [installationId, selected]);
 
-  const closeDialog = () => setDialog({ type: "none" });
+  const closeDialog = () => {
+    setDialog({ type: "none" });
+    addAction.clear();
+  };
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[1400px] px-4 pt-8 pb-16 sm:px-6 sm:pt-10">
