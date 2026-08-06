@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { githubAppStatus } from "@/lib/env";
 import { GitHubApiError } from "@/lib/github/client";
+import { assertInstallationAccess } from "@/lib/github/ownership";
 import { syncRepository } from "@/lib/github/sync-repository";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
 
@@ -36,6 +37,11 @@ export async function POST(request: Request) {
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: "Geçersiz senkronizasyon isteği." }, { status: 400 });
+  }
+
+  const access = await assertInstallationAccess(request, parsed.data.installationId);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
   // Proje bazlı spam koruması: 60 sn içinde en fazla 2 senkronizasyon

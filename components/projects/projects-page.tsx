@@ -24,6 +24,7 @@ import ProjectsHeader from "@/components/projects/projects-header";
 import RepositoryPicker from "@/components/projects/repository-picker";
 import { useProjects } from "@/hooks/use-projects";
 import { useActionParam } from "@/hooks/use-action-param";
+import { useGithubInstallation } from "@/hooks/use-github-installation";
 import { computeHealth } from "@/lib/projects/health";
 import { computeMetrics } from "@/lib/projects/metrics";
 import type { FeatureInput, NoteInput, ProjectInput } from "@/lib/projects/validation";
@@ -91,11 +92,6 @@ export default function ProjectsPage({
   const [roadmap, setRoadmap] = useState<RoadmapDraft | null>(null);
   const [releaseNotes, setReleaseNotes] = useState<ReleaseNotesDraft | null>(null);
 
-  // GitHub kurulumdan dönüş bilgisi (yalnızca URL'den okunur)
-  const installationId = Number(params.get("installation_id")) || null;
-  const githubAccount = params.get("account");
-  const githubConnected = integrations.github && installationId !== null;
-
   const selectedId = params.get("project");
   const tabParam = params.get("tab") ?? "overview";
   const tab: ProjectTab = isProjectTab(tabParam) ? tabParam : "overview";
@@ -123,6 +119,36 @@ export default function ProjectsPage({
     if (!library.hydrated || selectedId || library.projects.length === 0) return;
     setParam({ project: library.projects[0].id });
   }, [library.hydrated, library.projects, selectedId, setParam]);
+
+  /**
+   * GitHub bağlantısı. URL'deki installation_id kurulumdan dönüşte bir kez
+   * gelir; kaydedildikten sonra adresten temizlenir, kalıcı kaynak sunucudur.
+   */
+  const pendingInstallationId = Number(params.get("installation_id")) || null;
+  const consumeInstallationParam = useCallback(() => {
+    setParam({ installation_id: null, github: null, account: null });
+  }, [setParam]);
+
+  const github = useGithubInstallation({
+    enabled: integrations.github,
+    mode: library.mode,
+    accessToken: library.accessToken,
+    pendingInstallationId,
+    onConsumed: consumeInstallationParam,
+  });
+
+  const installationId = github.installation?.installationId ?? null;
+  const githubAccount = github.installation?.accountLogin ?? null;
+  const githubConnected = integrations.github && installationId !== null;
+
+  /** GitHub uçları kurulumun sahibini token'dan doğruluyor. */
+  const githubHeaders = useMemo<Record<string, string>>(
+    () => ({
+      "Content-Type": "application/json",
+      ...(library.accessToken ? { Authorization: `Bearer ${library.accessToken}` } : {}),
+    }),
+    [library.accessToken],
+  );
 
   const projectFeatures = useMemo(
     () => library.features.filter((f) => f.projectId === selected?.id),
@@ -376,7 +402,7 @@ export default function ProjectsPage({
       try {
         const response = await fetch("/api/github/issues", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: githubHeaders,
           body: JSON.stringify({
             installationId,
             fullName: selected.githubFullName,
@@ -410,7 +436,7 @@ export default function ProjectsPage({
         setCreatingIssue(false);
       }
     },
-    [installationId, library, selected],
+    [githubHeaders, installationId, library, selected],
   );
 
   const handleSync = useCallback(async () => {
@@ -420,7 +446,7 @@ export default function ProjectsPage({
     try {
       const response = await fetch("/api/github/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: githubHeaders,
         body: JSON.stringify({ installationId, fullName: selected.githubFullName }),
       });
       const payload: unknown = await response.json().catch(() => null);
@@ -445,7 +471,7 @@ export default function ProjectsPage({
     } finally {
       setSyncing(false);
     }
-  }, [installationId, selected]);
+  }, [githubHeaders, installationId, selected]);
 
   const closeDialog = () => {
     setDialog({ type: "none" });
@@ -457,16 +483,34 @@ export default function ProjectsPage({
       <ProjectsHeader
         githubConnected={githubConnected}
         githubAccount={githubAccount}
+        githubLoading={github.loading}
         mode={library.mode}
         userEmail={library.userEmail}
         onNewProject={() => setDialog({ type: "project", project: null })}
         onConnectGithub={() => setDialog({ type: "github" })}
+        onDisconnectGithub={() =>
+          setDialog({
+            type: "confirm",
+            title: "GitHub bağlantısını kaldır",
+            message:
+              "Uygulamadaki bağlantı kaydı silinecek. GitHub App hesabında kurulu kalır; tamamen kaldırmak için GitHub ayarlarından da silmen gerekir.",
+            onConfirm: () => void github.disconnect(),
+          })
+        }
         onSignOut={() => void library.signOut()}
       />
 
       {library.error && (
         <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
           {library.error}
+        </p>
+      )}
+
+      {/* Kurulum kaydı oluşturulamazsa sessiz kalmasın — bağlantı kurulmuş görünüp
+          çalışmaması, hata göstermekten daha kötü. */}
+      {github.error && (
+        <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
+          GitHub: {github.error}
         </p>
       )}
 
@@ -728,6 +772,7 @@ export default function ProjectsPage({
       {dialog.type === "repos" && (
         <RepositoryPicker
           installationId={dialog.installationId}
+          accessToken={library.accessToken}
           onPick={(repo) => {
             if (selected) {
               void library.updateProject(selected.id, {

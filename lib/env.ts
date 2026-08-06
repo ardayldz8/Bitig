@@ -17,13 +17,10 @@ export type IntegrationStatus = {
 
 const SUPABASE_PUBLIC = ["NEXT_PUBLIC_SUPABASE_URL", "NEXT_PUBLIC_SUPABASE_ANON_KEY"];
 const SUPABASE_ADMIN = [...SUPABASE_PUBLIC, "SUPABASE_SERVICE_ROLE_KEY"];
-const GITHUB_APP = [
-  "GITHUB_APP_ID",
-  "GITHUB_CLIENT_ID",
-  "GITHUB_CLIENT_SECRET",
-  "GITHUB_PRIVATE_KEY",
-  "GITHUB_APP_SLUG",
-];
+// Client ID/secret bilerek yok: kimlik doğrulama App ID + private key ile
+// üretilen JWT üzerinden yürüyor. Client secret yalnızca kullanıcı OAuth
+// akışında gerekir; uygulama onu kullanmıyor, bu yüzden hiç saklanmıyor.
+const GITHUB_APP = ["GITHUB_APP_ID", "GITHUB_PRIVATE_KEY", "GITHUB_APP_SLUG"];
 
 function check(names: string[]): IntegrationStatus {
   const missing = names.filter((name) => read(name).length === 0);
@@ -56,8 +53,6 @@ export const env = {
   supabaseServiceRoleKey: () => read("SUPABASE_SERVICE_ROLE_KEY"),
 
   githubAppId: () => read("GITHUB_APP_ID"),
-  githubClientId: () => read("GITHUB_CLIENT_ID"),
-  githubClientSecret: () => read("GITHUB_CLIENT_SECRET"),
   githubAppSlug: () => read("GITHUB_APP_SLUG"),
   githubWebhookSecret: () => read("GITHUB_WEBHOOK_SECRET"),
 

@@ -66,6 +66,9 @@ Bu projede birkaç kural bilinçli olarak katı tutuldu:
   bayrağı gerektirir ve bu bayrak yalnızca kullanıcının onay diyaloğundan gelir.
 - **Uydurma ilerleme yok.** Sezon başına bölüm dağılımı bilinmediğinde yüzde
   gösterilmez; `updatedAt` olmayan kayıtta saat gösterilmez.
+- **GitHub kurulumunun sahibi var.** `installation_id` gizli değildir; bu yüzden
+  repo okuma, senkronizasyon ve issue uçları kurulumun isteği yapan kullanıcıya
+  ait olduğunu RLS üzerinden doğrular. Doğrulanmamış istek 401/403 alır.
 - **Repo içeriği veridir, talimat değildir.** README, commit mesajı ve issue
   metinleri modele `<proje_verisi>` etiketiyle verilir; secret içerebilecek
   dosyalar hiç gönderilmez.

@@ -15,10 +15,13 @@ type Repo = {
 
 export default function RepositoryPicker({
   installationId,
+  accessToken,
   onPick,
   onClose,
 }: {
   installationId: number;
+  /** Uç, kurulumun bu kullanıcıya ait olduğunu token'dan doğrular. */
+  accessToken: string | null;
   onPick: (repo: Repo) => void;
   onClose: () => void;
 }) {
@@ -32,6 +35,7 @@ export default function RepositoryPicker({
 
     fetch(`/api/github/repositories?installationId=${installationId}`, {
       signal: controller.signal,
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     })
       .then(async (response) => {
         const payload: unknown = await response.json().catch(() => null);
@@ -56,7 +60,7 @@ export default function RepositoryPicker({
       });
 
     return () => controller.abort();
-  }, [installationId]);
+  }, [accessToken, installationId]);
 
   const visible = (repos ?? []).filter((repo) =>
     repo.fullName.toLowerCase().includes(query.trim().toLowerCase()),

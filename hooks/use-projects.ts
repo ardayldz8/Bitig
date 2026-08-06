@@ -39,6 +39,8 @@ export type ProjectsApi = ProjectsState & {
   hydrated: boolean;
   mode: StorageMode;
   userEmail: string | null;
+  /** API uçlarına Authorization başlığı için — sunucu tarafında doğrulanır. */
+  accessToken: string | null;
   error: string | null;
 
   signIn: (email: string, password: string) => Promise<string | null>;
@@ -578,6 +580,7 @@ export function useProjects(): ProjectsApi {
     hydrated,
     mode,
     userEmail: session?.user?.email ?? null,
+    accessToken: session?.access_token ?? null,
     error,
     signIn,
     signUp,

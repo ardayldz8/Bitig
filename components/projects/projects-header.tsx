@@ -1,25 +1,30 @@
 "use client";
 
-import { Cloud, Github, LogOut, Plus } from "lucide-react";
+import { Cloud, Github, LogOut, Plus, Unlink } from "lucide-react";
 import type { StorageMode } from "@/hooks/use-projects";
 
 type HeaderProps = {
   githubConnected: boolean;
   githubAccount: string | null;
+  /** Durum okunurken "bağla" düğmesi gösterilmez — yanıp sönmesin. */
+  githubLoading: boolean;
   mode: StorageMode;
   userEmail: string | null;
   onNewProject: () => void;
   onConnectGithub: () => void;
+  onDisconnectGithub: () => void;
   onSignOut: () => void;
 };
 
 export default function ProjectsHeader({
   githubConnected,
   githubAccount,
+  githubLoading,
   mode,
   userEmail,
   onNewProject,
   onConnectGithub,
+  onDisconnectGithub,
   onSignOut,
 }: HeaderProps) {
   return (
@@ -51,13 +56,27 @@ export default function ProjectsHeader({
             </span>
           )}
 
-          {githubConnected ? (
+          {githubLoading ? (
+            <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm text-ink-soft">
+              <Github size={16} aria-hidden="true" />
+              GitHub kontrol ediliyor…
+            </span>
+          ) : githubConnected ? (
             <span className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line bg-surface px-3.5 text-sm text-ink-soft">
               <Github size={16} aria-hidden="true" className="text-ok" />
               GitHub bağlı
               {githubAccount && (
                 <strong className="font-medium text-ink">@{githubAccount}</strong>
               )}
+              <button
+                type="button"
+                onClick={onDisconnectGithub}
+                aria-label="GitHub bağlantısını kaldır"
+                title="Bağlantıyı kaldır"
+                className="ml-1 text-ink-soft transition-colors hover:text-danger"
+              >
+                <Unlink size={15} aria-hidden="true" />
+              </button>
             </span>
           ) : (
             <button

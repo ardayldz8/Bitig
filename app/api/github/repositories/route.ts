@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { githubAppStatus } from "@/lib/env";
 import { githubRequest, GitHubApiError } from "@/lib/github/client";
+import { assertInstallationAccess } from "@/lib/github/ownership";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
@@ -34,6 +35,11 @@ export async function GET(request: Request) {
   });
   if (!parsed.success) {
     return NextResponse.json({ error: "Geçersiz installation bilgisi." }, { status: 400 });
+  }
+
+  const access = await assertInstallationAccess(request, parsed.data.installationId);
+  if (!access.ok) {
+    return NextResponse.json({ error: access.error }, { status: access.status });
   }
 
   try {

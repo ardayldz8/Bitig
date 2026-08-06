@@ -1,3 +1,4 @@
+import { createAppJwt } from "@/lib/github/app-auth";
 import { getInstallationToken } from "@/lib/github/installation-token";
 
 const API = "https://api.github.com";
@@ -80,6 +81,40 @@ export async function githubRequest<T>(
   } finally {
     clearTimeout(timer);
     init?.signal?.removeEventListener("abort", onAbort);
+  }
+}
+
+/**
+ * App JWT ile kimliklenmiş çağrı.
+ *
+ * `/app/*` uçları installation token kabul etmez; uygulamanın kendi JWT'sini
+ * ister. Kurulumun hangi hesaba ait olduğunu okumak için gereken tek yol bu.
+ */
+export async function appRequest<T>(path: string): Promise<T> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`${API}${path}`, {
+      headers: {
+        Authorization: `Bearer ${createAppJwt()}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+      },
+      signal: controller.signal,
+    });
+
+    readRateLimit(response.headers);
+
+    if (!response.ok) {
+      const rateLimited =
+        response.status === 403 && response.headers.get("x-ratelimit-remaining") === "0";
+      throw new GitHubApiError(`github_${response.status}`, response.status, rateLimited);
+    }
+
+    return (await response.json()) as T;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
