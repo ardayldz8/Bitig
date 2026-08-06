@@ -1,16 +1,46 @@
 import type { Metadata, Viewport } from "next";
+import PwaRegister from "@/components/ui/pwa-register";
 import SiteNav from "@/components/ui/site-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Bitig — Manga Takibi",
-  description: "Okuduğun mangaları ve kaldığın bölümü takip et.",
+  title: {
+    default: "Bitig",
+    template: "%s — Bitig",
+  },
+  description: "Manga, kalori, dizi/film ve yazılım projelerini tek yerden takip et.",
+  applicationName: "Bitig",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+      { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  // iOS'ta ana ekrana eklendiğinde tam ekran uygulama gibi açılsın
+  appleWebApp: {
+    capable: true,
+    title: "Bitig",
+    statusBarStyle: "default",
+  },
+  openGraph: {
+    title: "Bitig",
+    description: "Manga, kalori, dizi/film ve yazılım projelerini tek yerden takip et.",
+    images: ["/og-image.png"],
+    type: "website",
+    locale: "tr_TR",
+  },
+  formatDetection: { telephone: false },
 };
 
 export const viewport: Viewport = {
   themeColor: "#7c5cf5",
   width: "device-width",
   initialScale: 1,
+  // Kullanıcı yakınlaştırabilsin (erişilebilirlik) — maximumScale kısıtlanmaz
+  viewportFit: "cover",
 };
 
 export default function RootLayout({
@@ -21,6 +51,7 @@ export default function RootLayout({
       <body className="min-h-dvh antialiased">
         <SiteNav />
         {children}
+        <PwaRegister />
       </body>
     </html>
   );

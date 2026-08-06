@@ -4,7 +4,7 @@ import ProjectsPage from "@/components/projects/projects-page";
 import { integrationsSnapshot } from "@/lib/env";
 
 export const metadata: Metadata = {
-  title: "Projelerim — Bitig",
+  title: "Projelerim",
   description: "Projelerini takip et, geliştirme sürecini organize et.",
 };
 

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import MangaPage from "@/components/manga/manga-page";
 
 export const metadata: Metadata = {
-  title: "Manga Takibi — Bitig",
+  title: "Manga Takibi",
   description: "Okuduklarını takip et, bölümünü unutma.",
 };
 

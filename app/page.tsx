@@ -4,7 +4,7 @@ import DashboardPage from "@/components/dashboard/dashboard-page";
 import QuickActions from "@/components/dashboard/quick-actions";
 
 export const metadata: Metadata = {
-  title: "Bitig",
+  title: { absolute: "Bitig" },
   description: "Manga, kalori, dizi/film ve proje takibin tek yerde.",
 };
 
