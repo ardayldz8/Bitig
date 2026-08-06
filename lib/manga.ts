@@ -15,6 +15,7 @@ export const initialMangas: Manga[] = [
     currentChapter: 376,
     rating: 10,
     status: "completed",
+    coverUrl: null,
   },
   {
     id: "vagabond",
@@ -22,6 +23,7 @@ export const initialMangas: Manga[] = [
     currentChapter: 327,
     rating: 9,
     status: "reading",
+    coverUrl: null,
   },
   {
     id: "one-piece",
@@ -29,6 +31,7 @@ export const initialMangas: Manga[] = [
     currentChapter: 1124,
     rating: 9,
     status: "reading",
+    coverUrl: null,
   },
   {
     id: "kingdom",
@@ -36,6 +39,7 @@ export const initialMangas: Manga[] = [
     currentChapter: 812,
     rating: 8,
     status: "reading",
+    coverUrl: null,
   },
 ];
 
@@ -151,7 +155,7 @@ function parseNumber(raw: string): number | null {
 }
 
 export function emptyFormValues(): MangaFormValues {
-  return { name: "", currentChapter: "", rating: "", status: "reading" };
+  return { name: "", currentChapter: "", rating: "", status: "reading", coverUrl: "" };
 }
 
 export function formValuesFromManga(manga: Manga): MangaFormValues {
@@ -160,7 +164,18 @@ export function formValuesFromManga(manga: Manga): MangaFormValues {
     currentChapter: String(manga.currentChapter),
     rating: String(manga.rating),
     status: manga.status,
+    coverUrl: manga.coverUrl ?? "",
   };
+}
+
+/** Kapak adresi yalnızca http/https olabilir. */
+export function isValidCoverUrl(raw: string): boolean {
+  try {
+    const url = new URL(raw.trim());
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
 }
 
 export type ValidationResult =
@@ -199,12 +214,22 @@ export function validateMangaForm(
     errors.rating = `Puan 0 ile ${MAX_RATING} arasında olmalı.`;
   }
 
+  // Kapak adresi opsiyonel; doluysa geçerli bir http(s) adresi olmalı
+  let coverUrl: string | null = null;
+  if (values.coverUrl.trim()) {
+    if (!isValidCoverUrl(values.coverUrl)) {
+      errors.coverUrl = "Geçerli bir adres gir (http:// veya https:// ile başlamalı).";
+    } else {
+      coverUrl = values.coverUrl.trim();
+    }
+  }
+
   if (Object.keys(errors).length > 0 || chapter === null || rating === null) {
     return { ok: false, errors };
   }
 
   return {
     ok: true,
-    draft: { name, currentChapter: chapter, rating, status: values.status },
+    draft: { name, currentChapter: chapter, rating, status: values.status, coverUrl },
   };
 }

@@ -1,8 +1,41 @@
 "use client";
 
+import { useState } from "react";
 import { BookOpen, Minus, Pencil, Plus, Star, Trash2 } from "lucide-react";
 import { MAX_RATING, coverLetter, formatNumber } from "@/lib/manga";
 import type { Manga } from "@/types/manga";
+
+/**
+ * Kapak: adres varsa görsel, yoksa (ya da görsel yüklenemezse) harf yer tutucusu.
+ * next/image yerine düz <img> — keyfi harici alan adları için domain
+ * yapılandırması gerektirmez.
+ */
+function Cover({ manga }: { manga: Manga }) {
+  const [failed, setFailed] = useState(false);
+  const showImage = manga.coverUrl !== null && !failed;
+
+  return (
+    <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-line-strong bg-brand-soft">
+      {showImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={manga.coverUrl ?? ""}
+          alt={`${manga.name} kapağı`}
+          onError={() => setFailed(true)}
+          loading="lazy"
+          className="h-full w-full object-cover"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="grid h-full w-full place-items-center text-2xl font-bold text-brand"
+        >
+          {coverLetter(manga.name)}
+        </div>
+      )}
+    </div>
+  );
+}
 
 type MangaCardProps = {
   manga: Manga;
@@ -25,13 +58,7 @@ export default function MangaCard({
   return (
     <article className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
       <div className="flex items-start gap-4">
-        {/* Kapak yerine sade tipografik yer tutucu */}
-        <div
-          aria-hidden="true"
-          className="grid h-16 w-16 shrink-0 place-items-center rounded-xl border border-line-strong bg-brand-soft text-2xl font-bold text-brand"
-        >
-          {coverLetter(manga.name)}
-        </div>
+        <Cover manga={manga} />
 
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-base font-semibold text-ink sm:text-lg">

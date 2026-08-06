@@ -52,17 +52,8 @@ export default function MangaPage() {
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-28 sm:px-6 sm:pt-10">
       <header>
-        <div className="flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <span
-              aria-hidden="true"
-              className="grid h-9 w-9 place-items-center rounded-xl bg-brand text-lg font-bold text-white"
-            >
-              B
-            </span>
-            <span className="text-lg font-semibold text-ink">Bitig</span>
-          </div>
-
+        {/* Marka alanı üstteki gezinme çubuğunda; burada tekrarlanmaz */}
+        <div className="flex justify-end">
           <span className="inline-flex items-center gap-2 rounded-full border border-line bg-surface px-3.5 py-2 text-sm text-ink-soft shadow-card">
             <Library size={16} aria-hidden="true" className="text-brand" />
             Toplam <strong className="font-semibold text-ink">{mangas.length}</strong>{" "}
@@ -70,7 +61,7 @@ export default function MangaPage() {
           </span>
         </div>
 
-        <h1 className="mt-8 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+        <h1 className="mt-5 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
           Manga Takibi
         </h1>
         <p className="mt-2 text-ink-soft">

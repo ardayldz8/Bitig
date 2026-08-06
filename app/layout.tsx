@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import SiteNav from "@/components/ui/site-nav";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -17,7 +18,10 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="tr">
-      <body className="min-h-dvh antialiased">{children}</body>
+      <body className="min-h-dvh antialiased">
+        <SiteNav />
+        {children}
+      </body>
     </html>
   );
 }

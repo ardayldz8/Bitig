@@ -19,6 +19,17 @@ function isManga(value: unknown): value is Manga {
 }
 
 /**
+ * `coverUrl` sonradan eklendi; daha önce kaydedilmiş kayıtlarda bulunmaz.
+ * Eksik/geçersiz olduğunda null'a tamamlanır — eski veriler kaybolmaz.
+ */
+function normalize(manga: Manga & { coverUrl?: unknown }): Manga {
+  return {
+    ...manga,
+    coverUrl: typeof manga.coverUrl === "string" && manga.coverUrl ? manga.coverUrl : null,
+  };
+}
+
+/**
  * Kayıtlı listeyi okur. Tarayıcı dışında (SSR) ya da veri bozuksa null döner —
  * çağıran taraf bu durumda varsayılan örnek veriyi kullanır.
  */
@@ -32,7 +43,7 @@ export function readStoredMangas(): Manga[] | null {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return null;
 
-    return parsed.filter(isManga);
+    return parsed.filter(isManga).map(normalize);
   } catch {
     // Bozuk JSON / erişilemeyen depolama (ör. Safari gizli mod)
     return null;

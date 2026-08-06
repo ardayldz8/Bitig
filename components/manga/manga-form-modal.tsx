@@ -65,6 +65,7 @@ export default function MangaFormModal({
   const chapterId = `${baseId}-chapter`;
   const ratingId = `${baseId}-rating`;
   const statusId = `${baseId}-status`;
+  const coverId = `${baseId}-cover`;
 
   return (
     <Modal
@@ -147,6 +148,20 @@ export default function MangaFormModal({
             <option value="reading">Devam ediyor</option>
             <option value="completed">Tamamlandı</option>
           </select>
+        </Field>
+
+        <Field label="Kapak adresi (opsiyonel)" htmlFor={coverId} error={errors.coverUrl}>
+          <input
+            id={coverId}
+            type="url"
+            value={values.coverUrl}
+            onChange={(event) => setField("coverUrl", event.target.value)}
+            placeholder="https://..."
+            autoComplete="off"
+            aria-invalid={errors.coverUrl ? true : undefined}
+            aria-describedby={errors.coverUrl ? `${coverId}-error` : undefined}
+            className={`${fieldClass} ${errors.coverUrl ? "border-danger" : "border-line"}`}
+          />
         </Field>
 
         <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">

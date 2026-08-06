@@ -10,9 +10,8 @@ type MediaHeaderProps = {
 export default function MediaHeader({ total, onAdd }: MediaHeaderProps) {
   return (
     <header>
-      <p className="text-sm font-semibold text-brand">Bitig</p>
-
-      <h1 className="mt-2 text-3xl font-bold tracking-tight text-ink sm:text-4xl">
+      {/* Marka alanı üstteki gezinme çubuğunda */}
+      <h1 className="text-3xl font-bold tracking-tight text-ink sm:text-4xl">
         Dizi / Film Takibi
       </h1>
       <p className="mt-1.5 text-ink-soft">İzlediklerini takip et, hiçbir şeyi unutma.</p>

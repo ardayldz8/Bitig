@@ -6,6 +6,8 @@ export type Manga = {
   currentChapter: number;
   rating: number;
   status: MangaStatus;
+  /** Kapak görseli adresi. Yoksa/yüklenemezse harf yer tutucusu gösterilir. */
+  coverUrl: string | null;
 };
 
 /** Kayıt oluşturulurken/düzenlenirken kullanılan, id'siz manga verisi. */
@@ -25,6 +27,9 @@ export type MangaFormValues = {
   currentChapter: string;
   rating: string;
   status: MangaStatus;
+  coverUrl: string;
 };
 
-export type MangaFormErrors = Partial<Record<"name" | "currentChapter" | "rating", string>>;
+export type MangaFormErrors = Partial<
+  Record<"name" | "currentChapter" | "rating" | "coverUrl", string>
+>;
