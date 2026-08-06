@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+@theme {
+  /* Yüzeyler — kırık beyaz zemin, beyaz kartlar */
+  --color-canvas: #faf8fd;
+  --color-surface: #ffffff;
+  --color-line: #ece9f7;
+  --color-line-strong: #ddd6f1;
+
+  /* Metin */
+  --color-ink: #1c1830;
+  --color-ink-soft: #6d6889;
+
+  /* Ana vurgu — mor */
+  --color-brand: #7c5cf5;
+  --color-brand-strong: #6742ea;
+  --color-brand-soft: #f3efff;
+
+  /* Durum renkleri */
+  --color-ok: #128855;
+  --color-ok-soft: #e6f6ef;
+  --color-danger: #d33a5c;
+  --color-danger-soft: #fdedf1;
+
+  --radius-card: 1.25rem;
+  --shadow-card: 0 1px 2px rgb(28 24 48 / 0.04), 0 10px 28px -18px rgb(28 24 48 / 0.35);
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    background-color: var(--color-canvas);
+    color: var(--color-ink);
+    font-family:
+      ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+      Arial, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Erişilebilirlik: klavye odağı her zaman görünür kalsın */
+  :focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+  }
+
+  /* iOS Safari'de odaklanınca sayfayı zoomlamasın diye min 16px */
+  input,
+  select,
+  button {
+    font-size: 1rem;
+  }
+}
