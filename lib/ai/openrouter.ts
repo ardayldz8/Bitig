@@ -5,8 +5,10 @@ import type { FoodVisionResult } from "@/lib/ai/food-analysis-schema";
  */
 export const OPENROUTER_CONFIG = {
   apiKey: process.env.OPENROUTER_API_KEY ?? "",
-  primaryModel: process.env.OPENROUTER_PRIMARY_MODEL ?? "google/gemini-3.1-flash-lite",
-  fallbackModel: process.env.OPENROUTER_FALLBACK_MODEL ?? "google/gemini-3.5-flash",
+  // Model adlarında `||`: tanımlı ama boş bir değişken `??` ile geçip varsayılanı
+  // devre dışı bırakıyor ve isteğe boş model adı gidiyordu.
+  primaryModel: process.env.OPENROUTER_PRIMARY_MODEL || "google/gemini-3.1-flash-lite",
+  fallbackModel: process.env.OPENROUTER_FALLBACK_MODEL || "google/gemini-3.5-flash",
   temperature: 0.1,
   maxTokens: 1200,
   endpoint: "https://openrouter.ai/api/v1/chat/completions",

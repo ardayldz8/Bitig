@@ -7,8 +7,10 @@ import "./globals.css";
  * OG/Twitter görsellerinin mutlak adrese çözülmesi için taban URL.
  * Netlify derlemede `URL` değişkenini sağlar; yerelde localhost'a düşer.
  */
+// `??` değil `||`: tanımlı ama boş bir değişken (Netlify'da değeri girilmemiş
+// değişkenler böyle gelebiliyor) `??` ile geçip new URL("")'i patlatıyordu.
 const siteUrl =
-  process.env.NEXT_PUBLIC_APP_URL ?? process.env.URL ?? "http://localhost:3000";
+  process.env.NEXT_PUBLIC_APP_URL || process.env.URL || "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
