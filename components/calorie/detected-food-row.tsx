@@ -27,6 +27,14 @@ export default function DetectedFoodRow({
 
   const sourceLabel = row.match ? SOURCE_LABELS[row.match.source] : null;
 
+  /**
+   * Makro alanları kontrolsüzdür (kullanıcı "8," gibi yarım değer yazabilsin diye).
+   * Miktar/birim değişince değerler kaynaktan yeniden hesaplandığı için alanların
+   * da tazelenmesi gerekir — bu anahtar yalnızca o zaman değişir, makroya
+   * yazarken değişmez (imleç kaymaz).
+   */
+  const macroKey = `${row.quantity}-${row.unit}`;
+
   function commitNumber(field: keyof DetectedFood, raw: string) {
     const value = parseDecimal(raw);
     if (value === null || value < 0) return;
@@ -111,6 +119,7 @@ export default function DetectedFoodRow({
               Kalori (kcal)
             </label>
             <input
+              key={macroKey}
               id={`${baseId}-kcal`}
               type="text"
               inputMode="decimal"
@@ -124,6 +133,7 @@ export default function DetectedFoodRow({
               Protein (g)
             </label>
             <input
+              key={macroKey}
               id={`${baseId}-protein`}
               type="text"
               inputMode="decimal"
@@ -137,6 +147,7 @@ export default function DetectedFoodRow({
               Karbonhidrat (g)
             </label>
             <input
+              key={macroKey}
               id={`${baseId}-carb`}
               type="text"
               inputMode="decimal"
@@ -150,6 +161,7 @@ export default function DetectedFoodRow({
               Yağ (g)
             </label>
             <input
+              key={macroKey}
               id={`${baseId}-fat`}
               type="text"
               inputMode="decimal"

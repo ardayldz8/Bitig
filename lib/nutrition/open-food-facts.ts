@@ -57,6 +57,9 @@ function toResult(product: Record<string, unknown>): NutritionSearchResult | nul
   };
 }
 
+/** Yalnızca ihtiyaç duyulan alanlar — yanıt boyutunu ciddi biçimde küçültür. */
+const FIELDS = "code,product_name,product_name_tr,brands,nutriments,serving_quantity,quantity";
+
 async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -68,6 +71,12 @@ async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
       signal: controller.signal,
     });
     if (!response.ok) return null;
+
+    // OFF hız sınırına takılınca 200 ile HTML hata sayfası döndürebiliyor;
+    // JSON.parse patlamasın diye içerik tipini önceden kontrol et.
+    const contentType = response.headers.get("content-type") ?? "";
+    if (!contentType.includes("json")) return null;
+
     return await response.json();
   } catch {
     return null;
@@ -89,7 +98,7 @@ export const openFoodFactsProvider: NutritionProvider = {
     const terms = [query.brand, query.query].filter(Boolean).join(" ");
     const url =
       `${BASE}/cgi/search.pl?search_terms=${encodeURIComponent(terms)}` +
-      `&search_simple=1&action=process&json=1&page_size=5`;
+      `&search_simple=1&action=process&json=1&page_size=5&fields=${FIELDS}`;
 
     const data = await fetchJson(url, signal);
     if (typeof data !== "object" || data === null) return [];
@@ -103,7 +112,7 @@ export const openFoodFactsProvider: NutritionProvider = {
   },
 
   async getByBarcode(barcode: string, signal?: AbortSignal) {
-    const url = `${BASE}/api/v2/product/${encodeURIComponent(barcode)}.json`;
+    const url = `${BASE}/api/v2/product/${encodeURIComponent(barcode)}.json?fields=${FIELDS}`;
     const data = await fetchJson(url, signal);
     if (typeof data !== "object" || data === null) return null;
 

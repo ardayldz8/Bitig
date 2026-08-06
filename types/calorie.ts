@@ -98,6 +98,15 @@ export type DetectedFood = {
   protein: number;
   carbohydrates: number;
   fat: number;
+  /**
+   * Kaynaktan hesaplanan değerler. Miktar değişince birlikte güncellenir,
+   * kullanıcı makroya elle dokununca DEĞİŞMEZ — böylece kaydedilen kayıtta
+   * sağlayıcının orijinal değeri korunur.
+   */
+  originalCalories: number | null;
+  originalProtein: number | null;
+  originalCarbohydrates: number | null;
+  originalFat: number | null;
   confidence: number | null;
   manuallyEdited: boolean;
 };

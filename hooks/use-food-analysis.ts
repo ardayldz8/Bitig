@@ -321,6 +321,7 @@ function recalcRow(row: DetectedFood, patch: Partial<DetectedFood>): DetectedFoo
     patch.carbohydrates !== undefined ||
     patch.fat !== undefined;
 
+  // Elle düzenlemede orijinal (kaynak) değerlere DOKUNULMAZ
   if (macrosTouched) {
     return { ...next, manuallyEdited: true };
   }
@@ -338,7 +339,15 @@ function recalcRow(row: DetectedFood, patch: Partial<DetectedFood>): DetectedFoo
         },
         base,
       );
-      return { ...next, ...scaled };
+      // Miktar değişti: hem gösterilen hem orijinal değer kaynaktan tazelenir
+      return {
+        ...next,
+        ...scaled,
+        originalCalories: scaled.calories,
+        originalProtein: scaled.protein,
+        originalCarbohydrates: scaled.carbohydrates,
+        originalFat: scaled.fat,
+      };
     }
   }
 
@@ -376,6 +385,10 @@ function buildRow(item: VisionItem, match: ResolvedNutrition | null): DetectedFo
     unit,
     match,
     ...scaled,
+    originalCalories: match ? scaled.calories : null,
+    originalProtein: match ? scaled.protein : null,
+    originalCarbohydrates: match ? scaled.carbohydrates : null,
+    originalFat: match ? scaled.fat : null,
     confidence: item.confidence,
     manuallyEdited: false,
   };
