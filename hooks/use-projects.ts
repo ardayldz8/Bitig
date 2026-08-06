@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { Session, SupabaseClient } from "@supabase/supabase-js";
 import {
   EMPTY_STATE,
   createId,
@@ -9,7 +10,9 @@ import {
   writeProjectsState,
   type ProjectsState,
 } from "@/lib/projects/store";
-import { isSupabaseConfigured } from "@/lib/supabase/client";
+import { fetchProjectsBundle } from "@/lib/projects/queries";
+import * as db from "@/lib/projects/mutations";
+import { getBrowserClient, isSupabaseConfigured } from "@/lib/supabase/client";
 import type {
   Project,
   ProjectActivity,
@@ -24,309 +27,561 @@ import type {
   TaskInput,
 } from "@/lib/projects/validation";
 
+/**
+ * Depolama modu:
+ *  local      — Supabase yapılandırılmamış, veriler yalnızca bu tarayıcıda
+ *  needs_auth — Supabase var ama oturum yok; kullanıcı giriş yapmalı
+ *  cloud      — Supabase + oturum: veriler bulutta, RLS ile korunuyor
+ */
+export type StorageMode = "loading" | "local" | "needs_auth" | "cloud";
+
 export type ProjectsApi = ProjectsState & {
   hydrated: boolean;
-  /** Supabase yapılandırılmadıysa veriler yalnızca bu tarayıcıda tutulur. */
-  localMode: boolean;
+  mode: StorageMode;
+  userEmail: string | null;
+  error: string | null;
 
-  createProject: (input: ProjectInput) => Project;
-  updateProject: (id: string, input: ProjectInput) => void;
-  deleteProject: (id: string) => void;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (email: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<void>;
 
-  createFeature: (projectId: string, input: FeatureInput) => ProjectFeature;
-  updateFeature: (id: string, input: FeatureInput) => void;
-  patchFeature: (id: string, patch: Partial<ProjectFeature>) => void;
-  deleteFeature: (id: string) => void;
+  createProject: (input: ProjectInput) => Promise<Project | null>;
+  updateProject: (id: string, input: ProjectInput) => Promise<void>;
+  deleteProject: (id: string) => Promise<void>;
 
-  createNote: (projectId: string, input: NoteInput) => ProjectNote;
-  updateNote: (id: string, input: NoteInput) => void;
-  patchNote: (id: string, patch: Partial<ProjectNote>) => void;
-  deleteNote: (id: string) => void;
+  createFeature: (projectId: string, input: FeatureInput) => Promise<void>;
+  updateFeature: (id: string, input: FeatureInput) => Promise<void>;
+  patchFeature: (id: string, patch: Partial<ProjectFeature>) => Promise<void>;
+  deleteFeature: (id: string) => Promise<void>;
 
-  createTask: (projectId: string, input: TaskInput) => ProjectTask;
-  patchTask: (id: string, patch: Partial<ProjectTask>) => void;
-  deleteTask: (id: string) => void;
+  createNote: (projectId: string, input: NoteInput) => Promise<void>;
+  updateNote: (id: string, input: NoteInput) => Promise<void>;
+  patchNote: (id: string, patch: Partial<ProjectNote>) => Promise<void>;
+  deleteNote: (id: string) => Promise<void>;
 
-  addActivity: (activity: Omit<ProjectActivity, "id">) => void;
+  createTask: (projectId: string, input: TaskInput) => Promise<void>;
+  patchTask: (id: string, patch: Partial<ProjectTask>) => Promise<void>;
+  deleteTask: (id: string) => Promise<void>;
+
+  addActivity: (activity: Omit<ProjectActivity, "id">) => Promise<void>;
 };
+
+const now = () => new Date().toISOString();
 
 export function useProjects(): ProjectsApi {
   const [state, setState] = useState<ProjectsState>(EMPTY_STATE);
+  const [mode, setMode] = useState<StorageMode>("loading");
+  const [session, setSession] = useState<Session | null>(null);
   const [hydrated, setHydrated] = useState(false);
-  const [localMode, setLocalMode] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  // Veriler yalnızca mount sonrası okunur → hydration uyuşmazlığı olmaz
+  const clientRef = useRef<SupabaseClient | null>(null);
+  const mountedRef = useRef(true);
+
   useEffect(() => {
-    setLocalMode(!isSupabaseConfigured());
-    setState(readProjectsState() ?? createSeedState());
-    setHydrated(true);
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
   }, []);
 
+  // Mount sonrası: yapılandırma + oturum durumunu belirle (hydration güvenli)
   useEffect(() => {
-    if (!hydrated) return;
+    if (!isSupabaseConfigured()) {
+      setState(readProjectsState() ?? createSeedState());
+      setMode("local");
+      setHydrated(true);
+      return;
+    }
+
+    const client = getBrowserClient();
+    clientRef.current = client;
+    if (!client) {
+      setMode("local");
+      setHydrated(true);
+      return;
+    }
+
+    client.auth.getSession().then(({ data }) => {
+      if (!mountedRef.current) return;
+      setSession(data.session);
+      setMode(data.session ? "cloud" : "needs_auth");
+      setHydrated(true);
+    });
+
+    const { data: sub } = client.auth.onAuthStateChange((_event, next) => {
+      if (!mountedRef.current) return;
+      setSession(next);
+      setMode(next ? "cloud" : "needs_auth");
+    });
+
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  const reload = useCallback(async () => {
+    const client = clientRef.current;
+    if (!client || !session?.user) return;
+    try {
+      const bundle = await fetchProjectsBundle(client, session.user.id);
+      if (mountedRef.current) {
+        setState(bundle);
+        setError(null);
+      }
+    } catch {
+      if (mountedRef.current) setError("Proje verileri yüklenemedi.");
+    }
+  }, [session]);
+
+  // Bulut modunda veriyi çek + Realtime'a abone ol
+  useEffect(() => {
+    const client = clientRef.current;
+    if (mode !== "cloud" || !client || !session?.user) return;
+
+    void reload();
+
+    const channel = client
+      .channel("bitig-projects")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "project_activities" },
+        () => void reload(),
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "projects" },
+        () => void reload(),
+      )
+      .subscribe();
+
+    return () => {
+      void client.removeChannel(channel);
+    };
+  }, [mode, session, reload]);
+
+  // Yerel modda her değişiklik localStorage'a yazılır
+  useEffect(() => {
+    if (mode !== "local" || !hydrated) return;
     writeProjectsState(state);
-  }, [state, hydrated]);
+  }, [state, mode, hydrated]);
 
-  const now = () => new Date().toISOString();
+  const isCloud = mode === "cloud";
+  const client = clientRef.current;
+  const userId = session?.user?.id ?? null;
 
-  const logActivity = useCallback(
-    (projectId: string, type: string, title: string, description: string | null = null) => {
-      const entry: ProjectActivity = {
-        id: createId(),
-        projectId,
-        source: "bitig",
-        type,
-        title,
-        description,
-        externalUrl: null,
-        occurredAt: new Date().toISOString(),
-      };
-      setState((prev) => ({
-        ...prev,
-        activities: [entry, ...prev.activities].slice(0, 300),
-      }));
+  /** Bulutta işlemi yapar, sonra durumu tazeler; yerelde doğrudan state'i günceller. */
+  const run = useCallback(
+    async (cloud: () => Promise<void>, local: () => void) => {
+      if (isCloud && client && userId) {
+        try {
+          await cloud();
+          await reload();
+          setError(null);
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "İşlem kaydedilemedi.");
+        }
+      } else {
+        local();
+      }
     },
-    [],
+    [isCloud, client, userId, reload],
   );
 
-  const createProject = useCallback((input: ProjectInput): Project => {
-    const timestamp = new Date().toISOString();
-    const project: Project = {
-      id: createId(),
-      userId: "local",
-      name: input.name,
-      description: input.description,
-      status: input.status,
-      repositoryId: null,
-      githubFullName: input.githubFullName,
-      githubDefaultBranch: null,
-      technologies: input.technologies,
-      lastSyncedAt: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-    };
-    const activity: ProjectActivity = {
-      id: createId(),
-      projectId: project.id,
-      source: "bitig",
-      type: "project_created",
-      title: "Proje oluşturuldu",
-      description: project.name,
-      externalUrl: null,
-      occurredAt: timestamp,
-    };
-    setState((prev) => ({
-      ...prev,
-      projects: [project, ...prev.projects],
-      activities: [activity, ...prev.activities],
-    }));
-    return project;
+  // --- Kimlik doğrulama ---
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    const supabase = clientRef.current;
+    if (!supabase) return "Supabase yapılandırılmamış.";
+    const { error: authError } = await supabase.auth.signInWithPassword({ email, password });
+    return authError ? authError.message : null;
   }, []);
 
-  const updateProject = useCallback((id: string, input: ProjectInput) => {
-    setState((prev) => ({
-      ...prev,
-      projects: prev.projects.map((project) =>
-        project.id === id
-          ? {
-              ...project,
-              name: input.name,
-              description: input.description,
-              status: input.status,
-              technologies: input.technologies,
-              githubFullName: input.githubFullName,
-              updatedAt: new Date().toISOString(),
-            }
-          : project,
-      ),
-    }));
+  const signUp = useCallback(async (email: string, password: string) => {
+    const supabase = clientRef.current;
+    if (!supabase) return "Supabase yapılandırılmamış.";
+    const { error: authError } = await supabase.auth.signUp({ email, password });
+    return authError ? authError.message : null;
   }, []);
 
-  const deleteProject = useCallback((id: string) => {
-    setState((prev) => ({
-      projects: prev.projects.filter((p) => p.id !== id),
-      features: prev.features.filter((f) => f.projectId !== id),
-      notes: prev.notes.filter((n) => n.projectId !== id),
-      tasks: prev.tasks.filter((t) => t.projectId !== id),
-      activities: prev.activities.filter((a) => a.projectId !== id),
-    }));
+  const signOut = useCallback(async () => {
+    await clientRef.current?.auth.signOut();
+    setState(EMPTY_STATE);
   }, []);
 
-  const createFeature = useCallback(
-    (projectId: string, input: FeatureInput): ProjectFeature => {
+  // --- Projeler ---
+
+  const createProject = useCallback(
+    async (input: ProjectInput): Promise<Project | null> => {
+      if (isCloud && client && userId) {
+        try {
+          const project = await db.insertProject(client, userId, input);
+          await db.insertActivity(client, {
+            projectId: project.id,
+            source: "bitig",
+            type: "project_created",
+            title: "Proje oluşturuldu",
+            description: project.name,
+            externalUrl: null,
+            occurredAt: now(),
+          });
+          await reload();
+          return project;
+        } catch (caught) {
+          setError(caught instanceof Error ? caught.message : "Proje oluşturulamadı.");
+          return null;
+        }
+      }
+
       const timestamp = now();
-      const feature: ProjectFeature = {
+      const project: Project = {
         id: createId(),
-        projectId,
-        title: input.title,
+        userId: "local",
+        name: input.name,
         description: input.description,
         status: input.status,
-        priority: input.priority,
-        acceptanceCriteria: input.acceptanceCriteria,
-        githubIssueNumber: null,
-        githubIssueUrl: null,
-        targetDate: input.targetDate,
-        completedAt: input.status === "completed" ? timestamp : null,
-        position: 0,
+        repositoryId: null,
+        githubFullName: input.githubFullName,
+        githubDefaultBranch: null,
+        technologies: input.technologies,
+        lastSyncedAt: null,
         createdAt: timestamp,
         updatedAt: timestamp,
+      };
+      const activity: ProjectActivity = {
+        id: createId(),
+        projectId: project.id,
+        source: "bitig",
+        type: "project_created",
+        title: "Proje oluşturuldu",
+        description: project.name,
+        externalUrl: null,
+        occurredAt: timestamp,
       };
       setState((prev) => ({
         ...prev,
-        features: [
-          ...prev.features,
-          { ...feature, position: prev.features.filter((f) => f.projectId === projectId).length },
-        ],
+        projects: [project, ...prev.projects],
+        activities: [activity, ...prev.activities],
       }));
-      logActivity(projectId, "feature_created", `"${input.title}" özelliği eklendi`);
-      return feature;
+      return project;
     },
-    [logActivity],
+    [isCloud, client, userId, reload],
   );
 
-  const updateFeature = useCallback((id: string, input: FeatureInput) => {
-    setState((prev) => ({
-      ...prev,
-      features: prev.features.map((feature) =>
-        feature.id === id
-          ? {
-              ...feature,
-              title: input.title,
-              description: input.description,
-              status: input.status,
-              priority: input.priority,
-              acceptanceCriteria: input.acceptanceCriteria,
-              targetDate: input.targetDate,
-              completedAt:
-                input.status === "completed"
-                  ? (feature.completedAt ?? new Date().toISOString())
-                  : null,
-              updatedAt: new Date().toISOString(),
-            }
-          : feature,
+  const updateProject = useCallback(
+    (id: string, input: ProjectInput) =>
+      run(
+        () => db.updateProjectRow(client!, id, input),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            projects: prev.projects.map((project) =>
+              project.id === id
+                ? { ...project, ...input, updatedAt: now() }
+                : project,
+            ),
+          })),
       ),
-    }));
-  }, []);
+    [run, client],
+  );
 
-  const patchFeature = useCallback((id: string, patch: Partial<ProjectFeature>) => {
-    setState((prev) => ({
-      ...prev,
-      features: prev.features.map((feature) =>
-        feature.id === id
-          ? { ...feature, ...patch, id: feature.id, updatedAt: new Date().toISOString() }
-          : feature,
+  const deleteProject = useCallback(
+    (id: string) =>
+      run(
+        () => db.deleteProjectRow(client!, id),
+        () =>
+          setState((prev) => ({
+            projects: prev.projects.filter((p) => p.id !== id),
+            features: prev.features.filter((f) => f.projectId !== id),
+            notes: prev.notes.filter((n) => n.projectId !== id),
+            tasks: prev.tasks.filter((t) => t.projectId !== id),
+            activities: prev.activities.filter((a) => a.projectId !== id),
+          })),
       ),
-    }));
-  }, []);
+    [run, client],
+  );
 
-  const deleteFeature = useCallback((id: string) => {
-    setState((prev) => ({
-      ...prev,
-      features: prev.features.filter((f) => f.id !== id),
-      notes: prev.notes.map((n) =>
-        n.relatedFeatureId === id ? { ...n, relatedFeatureId: null } : n,
+  // --- Özellikler ---
+
+  const createFeature = useCallback(
+    (projectId: string, input: FeatureInput) =>
+      run(
+        async () => {
+          const position = state.features.filter((f) => f.projectId === projectId).length;
+          await db.insertFeature(client!, projectId, input, position);
+          await db.insertActivity(client!, {
+            projectId,
+            source: "bitig",
+            type: "feature_created",
+            title: `"${input.title}" özelliği eklendi`,
+            description: null,
+            externalUrl: null,
+            occurredAt: now(),
+          });
+        },
+        () => {
+          const timestamp = now();
+          setState((prev) => ({
+            ...prev,
+            features: [
+              ...prev.features,
+              {
+                id: createId(),
+                projectId,
+                title: input.title,
+                description: input.description,
+                status: input.status,
+                priority: input.priority,
+                acceptanceCriteria: input.acceptanceCriteria,
+                githubIssueNumber: null,
+                githubIssueUrl: null,
+                targetDate: input.targetDate,
+                completedAt: input.status === "completed" ? timestamp : null,
+                position: prev.features.filter((f) => f.projectId === projectId).length,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              },
+            ],
+            activities: [
+              {
+                id: createId(),
+                projectId,
+                source: "bitig",
+                type: "feature_created",
+                title: `"${input.title}" özelliği eklendi`,
+                description: null,
+                externalUrl: null,
+                occurredAt: timestamp,
+              },
+              ...prev.activities,
+            ],
+          }));
+        },
       ),
-      tasks: prev.tasks.map((t) =>
-        t.relatedFeatureId === id ? { ...t, relatedFeatureId: null } : t,
+    [run, client, state.features],
+  );
+
+  const updateFeature = useCallback(
+    (id: string, input: FeatureInput) =>
+      run(
+        () => db.updateFeatureRow(client!, id, input),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            features: prev.features.map((feature) =>
+              feature.id === id
+                ? {
+                    ...feature,
+                    ...input,
+                    completedAt:
+                      input.status === "completed"
+                        ? (feature.completedAt ?? now())
+                        : null,
+                    updatedAt: now(),
+                  }
+                : feature,
+            ),
+          })),
       ),
-    }));
-  }, []);
+    [run, client],
+  );
+
+  const patchFeature = useCallback(
+    (id: string, patch: Partial<ProjectFeature>) =>
+      run(
+        () => db.patchFeatureRow(client!, id, patch),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            features: prev.features.map((feature) =>
+              feature.id === id
+                ? { ...feature, ...patch, id: feature.id, updatedAt: now() }
+                : feature,
+            ),
+          })),
+      ),
+    [run, client],
+  );
+
+  const deleteFeature = useCallback(
+    (id: string) =>
+      run(
+        () => db.deleteFeatureRow(client!, id),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            features: prev.features.filter((f) => f.id !== id),
+            notes: prev.notes.map((n) =>
+              n.relatedFeatureId === id ? { ...n, relatedFeatureId: null } : n,
+            ),
+            tasks: prev.tasks.map((t) =>
+              t.relatedFeatureId === id ? { ...t, relatedFeatureId: null } : t,
+            ),
+          })),
+      ),
+    [run, client],
+  );
+
+  // --- Notlar ---
 
   const createNote = useCallback(
-    (projectId: string, input: NoteInput): ProjectNote => {
-      const timestamp = now();
-      const note: ProjectNote = {
-        id: createId(),
-        projectId,
-        title: input.title,
-        content: input.content,
-        relatedFeatureId: input.relatedFeatureId,
-        tags: input.tags,
-        pinned: input.pinned,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      setState((prev) => ({ ...prev, notes: [note, ...prev.notes] }));
-      logActivity(projectId, "note_created", `"${input.title}" notu oluşturuldu`);
-      return note;
-    },
-    [logActivity],
+    (projectId: string, input: NoteInput) =>
+      run(
+        async () => {
+          await db.insertNote(client!, projectId, input);
+          await db.insertActivity(client!, {
+            projectId,
+            source: "bitig",
+            type: "note_created",
+            title: `"${input.title}" notu oluşturuldu`,
+            description: null,
+            externalUrl: null,
+            occurredAt: now(),
+          });
+        },
+        () => {
+          const timestamp = now();
+          setState((prev) => ({
+            ...prev,
+            notes: [
+              {
+                id: createId(),
+                projectId,
+                title: input.title,
+                content: input.content,
+                relatedFeatureId: input.relatedFeatureId,
+                tags: input.tags,
+                pinned: input.pinned,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              },
+              ...prev.notes,
+            ],
+          }));
+        },
+      ),
+    [run, client],
   );
 
-  const updateNote = useCallback((id: string, input: NoteInput) => {
-    setState((prev) => ({
-      ...prev,
-      notes: prev.notes.map((note) =>
-        note.id === id
-          ? { ...note, ...input, updatedAt: new Date().toISOString() }
-          : note,
+  const updateNote = useCallback(
+    (id: string, input: NoteInput) =>
+      run(
+        () => db.updateNoteRow(client!, id, input),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            notes: prev.notes.map((note) =>
+              note.id === id ? { ...note, ...input, updatedAt: now() } : note,
+            ),
+          })),
       ),
-    }));
-  }, []);
+    [run, client],
+  );
 
-  const patchNote = useCallback((id: string, patch: Partial<ProjectNote>) => {
-    setState((prev) => ({
-      ...prev,
-      notes: prev.notes.map((note) =>
-        note.id === id
-          ? { ...note, ...patch, id: note.id, updatedAt: new Date().toISOString() }
-          : note,
+  const patchNote = useCallback(
+    (id: string, patch: Partial<ProjectNote>) =>
+      run(
+        () => db.patchNoteRow(client!, id, patch),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            notes: prev.notes.map((note) =>
+              note.id === id ? { ...note, ...patch, id: note.id, updatedAt: now() } : note,
+            ),
+          })),
       ),
-    }));
-  }, []);
+    [run, client],
+  );
 
-  const deleteNote = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, notes: prev.notes.filter((n) => n.id !== id) }));
-  }, []);
+  const deleteNote = useCallback(
+    (id: string) =>
+      run(
+        () => db.deleteNoteRow(client!, id),
+        () => setState((prev) => ({ ...prev, notes: prev.notes.filter((n) => n.id !== id) })),
+      ),
+    [run, client],
+  );
+
+  // --- Görevler ---
 
   const createTask = useCallback(
-    (projectId: string, input: TaskInput): ProjectTask => {
-      const timestamp = now();
-      const task: ProjectTask = {
-        id: createId(),
-        projectId,
-        title: input.title,
-        description: input.description,
-        completed: input.completed,
-        priority: input.priority,
-        relatedFeatureId: input.relatedFeatureId,
-        githubIssueNumber: null,
-        dueDate: input.dueDate,
-        createdAt: timestamp,
-        updatedAt: timestamp,
-      };
-      setState((prev) => ({ ...prev, tasks: [task, ...prev.tasks] }));
-      return task;
-    },
-    [],
+    (projectId: string, input: TaskInput) =>
+      run(
+        async () => {
+          await db.insertTask(client!, projectId, input);
+        },
+        () => {
+          const timestamp = now();
+          setState((prev) => ({
+            ...prev,
+            tasks: [
+              {
+                id: createId(),
+                projectId,
+                title: input.title,
+                description: input.description,
+                completed: input.completed,
+                priority: input.priority,
+                relatedFeatureId: input.relatedFeatureId,
+                githubIssueNumber: null,
+                dueDate: input.dueDate,
+                createdAt: timestamp,
+                updatedAt: timestamp,
+              },
+              ...prev.tasks,
+            ],
+          }));
+        },
+      ),
+    [run, client],
   );
 
-  const patchTask = useCallback((id: string, patch: Partial<ProjectTask>) => {
-    setState((prev) => ({
-      ...prev,
-      tasks: prev.tasks.map((task) =>
-        task.id === id
-          ? { ...task, ...patch, id: task.id, updatedAt: new Date().toISOString() }
-          : task,
+  const patchTask = useCallback(
+    (id: string, patch: Partial<ProjectTask>) =>
+      run(
+        () => db.patchTaskRow(client!, id, patch),
+        () =>
+          setState((prev) => ({
+            ...prev,
+            tasks: prev.tasks.map((task) =>
+              task.id === id ? { ...task, ...patch, id: task.id, updatedAt: now() } : task,
+            ),
+          })),
       ),
-    }));
-  }, []);
+    [run, client],
+  );
 
-  const deleteTask = useCallback((id: string) => {
-    setState((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) }));
-  }, []);
+  const deleteTask = useCallback(
+    (id: string) =>
+      run(
+        () => db.deleteTaskRow(client!, id),
+        () => setState((prev) => ({ ...prev, tasks: prev.tasks.filter((t) => t.id !== id) })),
+      ),
+    [run, client],
+  );
 
-  const addActivity = useCallback((activity: Omit<ProjectActivity, "id">) => {
-    setState((prev) => ({
-      ...prev,
-      activities: [{ ...activity, id: createId() }, ...prev.activities].slice(0, 300),
-    }));
-  }, []);
+  const addActivity = useCallback(
+    (activity: Omit<ProjectActivity, "id">) =>
+      run(
+        async () => {
+          await db.insertActivity(client!, activity);
+        },
+        () =>
+          setState((prev) => ({
+            ...prev,
+            activities: [{ ...activity, id: createId() }, ...prev.activities].slice(0, 300),
+          })),
+      ),
+    [run, client],
+  );
 
   return {
     ...state,
     hydrated,
-    localMode,
+    mode,
+    userEmail: session?.user?.email ?? null,
+    error,
+    signIn,
+    signUp,
+    signOut,
     createProject,
     updateProject,
     deleteProject,

@@ -75,6 +75,7 @@ create table if not exists public.project_notes (
 );
 
 create index if not exists project_notes_project_idx on public.project_notes(project_id);
+create index if not exists project_notes_related_feature_idx on public.project_notes(related_feature_id);
 
 create table if not exists public.project_tasks (
   id                  uuid primary key default gen_random_uuid(),
@@ -92,6 +93,7 @@ create table if not exists public.project_tasks (
 );
 
 create index if not exists project_tasks_project_idx on public.project_tasks(project_id);
+create index if not exists project_tasks_related_feature_idx on public.project_tasks(related_feature_id);
 
 create table if not exists public.project_activities (
   id           uuid primary key default gen_random_uuid(),
@@ -248,12 +250,14 @@ alter table public.github_webhook_deliveries enable row level security;
 -- Kullanıcı yalnızca kendi installation kayıtlarını yönetir
 drop policy if exists github_installations_owner on public.github_installations;
 create policy github_installations_owner on public.github_installations
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 -- Kullanıcı yalnızca kendi projelerini yönetir
 drop policy if exists projects_owner on public.projects;
 create policy projects_owner on public.projects
-  for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
+  for all to authenticated
+  using ((select auth.uid()) = user_id) with check ((select auth.uid()) = user_id);
 
 -- Alt tablolar: proje sahipliği üzerinden erişim
 do $$
@@ -269,14 +273,14 @@ begin
     execute format('drop policy if exists %I_owner on public.%I', child, child);
     execute format($f$
       create policy %I_owner on public.%I
-        for all
+        for all to authenticated
         using (exists (
           select 1 from public.projects p
-          where p.id = %I.project_id and p.user_id = auth.uid()
+          where p.id = %I.project_id and p.user_id = (select auth.uid())
         ))
         with check (exists (
           select 1 from public.projects p
-          where p.id = %I.project_id and p.user_id = auth.uid()
+          where p.id = %I.project_id and p.user_id = (select auth.uid())
         ))
     $f$, child, child, child, child);
   end loop;
@@ -287,9 +291,21 @@ end $$;
 
 -- ---------------------------------------------------------------- Realtime
 
-alter publication supabase_realtime add table public.projects;
-alter publication supabase_realtime add table public.project_activities;
-alter publication supabase_realtime add table public.github_commits;
-alter publication supabase_realtime add table public.github_pull_requests;
-alter publication supabase_realtime add table public.github_issues;
-alter publication supabase_realtime add table public.github_workflow_runs;
+-- Tablo zaten publication'daysa hata verilmez.
+do $$
+declare
+  t text;
+begin
+  foreach t in array array[
+    'projects','project_activities','github_commits',
+    'github_pull_requests','github_issues','github_workflow_runs'
+  ]
+  loop
+    if not exists (
+      select 1 from pg_publication_tables
+      where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t
+    ) then
+      execute format('alter publication supabase_realtime add table public.%I', t);
+    end if;
+  end loop;
+end $$;

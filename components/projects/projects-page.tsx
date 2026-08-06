@@ -9,6 +9,7 @@ import GithubConnectModal from "@/components/projects/github-connect-modal";
 import NoteFormModal from "@/components/projects/note-form-modal";
 import ProjectActivityFeed from "@/components/projects/project-activity";
 import ProjectAiAssistant, { type AiStage } from "@/components/projects/project-ai-assistant";
+import ProjectAuth from "@/components/projects/project-auth";
 import ProjectDetail from "@/components/projects/project-detail";
 import ProjectFeatures from "@/components/projects/project-features";
 import ProjectFiles from "@/components/projects/project-files";
@@ -249,7 +250,7 @@ export default function ProjectsPage({
           : null,
       );
       setSummaries((prev) => ({ ...prev, [selected.id]: summary }));
-      library.addActivity({
+      void library.addActivity({
         projectId: selected.id,
         source: "ai",
         type: "ai_summary",
@@ -382,7 +383,7 @@ export default function ProjectsPage({
               : null;
           throw new Error(typeof message === "string" ? message : "Issue oluşturulamadı.");
         }
-        library.addActivity({
+        void library.addActivity({
           projectId: selected.id,
           source: "github",
           type: "issue",
@@ -442,11 +443,24 @@ export default function ProjectsPage({
       <ProjectsHeader
         githubConnected={githubConnected}
         githubAccount={githubAccount}
-        localMode={library.localMode}
+        mode={library.mode}
+        userEmail={library.userEmail}
         onNewProject={() => setDialog({ type: "project", project: null })}
         onConnectGithub={() => setDialog({ type: "github" })}
+        onSignOut={() => void library.signOut()}
       />
 
+      {library.error && (
+        <p role="alert" className="mt-3 rounded-xl bg-danger-soft px-3.5 py-2.5 text-sm text-danger">
+          {library.error}
+        </p>
+      )}
+
+      {/* Supabase bağlı ama oturum yok → veri gösterilmez, giriş istenir */}
+      {library.mode === "needs_auth" ? (
+        <ProjectAuth onSignIn={library.signIn} onSignUp={library.signUp} />
+      ) : (
+        <>
       <div className="mt-6">
         <ProjectStats stats={stats} />
       </div>
@@ -500,7 +514,7 @@ export default function ProjectsPage({
                     title: "Projeyi sil",
                     message: `"${selected.name}" projesi ve tüm özellik, not ve görevleri silinecek. Bu işlem geri alınamaz.`,
                     onConfirm: () => {
-                      library.deleteProject(selected.id);
+                      void library.deleteProject(selected.id);
                       setParam({ project: null });
                       closeDialog();
                     },
@@ -531,7 +545,7 @@ export default function ProjectsPage({
                     onAdd={() => setDialog({ type: "feature", feature: null })}
                     onEdit={(feature) => setDialog({ type: "feature", feature })}
                     onComplete={(feature) =>
-                      library.patchFeature(feature.id, {
+                      void library.patchFeature(feature.id, {
                         status: "completed",
                         completedAt: new Date().toISOString(),
                       })
@@ -549,7 +563,7 @@ export default function ProjectsPage({
                         title: "Özelliği sil",
                         message: `"${feature.title}" silinecek.`,
                         onConfirm: () => {
-                          library.deleteFeature(feature.id);
+                          void library.deleteFeature(feature.id);
                           closeDialog();
                         },
                       })
@@ -566,7 +580,7 @@ export default function ProjectsPage({
                     onAdd={() => setDialog({ type: "note", note: null })}
                     onEdit={(note) => setDialog({ type: "note", note })}
                     onTogglePin={(note) =>
-                      library.patchNote(note.id, { pinned: !note.pinned })
+                      void library.patchNote(note.id, { pinned: !note.pinned })
                     }
                     onConvertToFeature={(note) => void handleNoteToFeature(note)}
                     onConvertToIssue={(note) =>
@@ -578,7 +592,7 @@ export default function ProjectsPage({
                         title: "Notu sil",
                         message: `"${note.title}" silinecek.`,
                         onConfirm: () => {
-                          library.deleteNote(note.id);
+                          void library.deleteNote(note.id);
                           closeDialog();
                         },
                       })
@@ -591,7 +605,7 @@ export default function ProjectsPage({
                     tasks={projectTasks}
                     features={projectFeatures}
                     onCreate={(title, priority, relatedFeatureId) =>
-                      library.createTask(selected.id, {
+                      void library.createTask(selected.id, {
                         title,
                         description: null,
                         completed: false,
@@ -601,9 +615,9 @@ export default function ProjectsPage({
                       })
                     }
                     onToggle={(task) =>
-                      library.patchTask(task.id, { completed: !task.completed })
+                      void library.patchTask(task.id, { completed: !task.completed })
                     }
-                    onDelete={(task) => library.deleteTask(task.id)}
+                    onDelete={(task) => void library.deleteTask(task.id)}
                   />
                 )}
 
@@ -641,16 +655,21 @@ export default function ProjectsPage({
         </div>
       )}
 
+        </>
+      )}
+
       {/* --- Diyaloglar --- */}
 
       {dialog.type === "project" && (
         <ProjectFormModal
           project={dialog.project}
           onSave={(input: ProjectInput) => {
-            if (dialog.project) library.updateProject(dialog.project.id, input);
-            else {
-              const created = library.createProject(input);
-              setParam({ project: created.id, tab: "overview" });
+            if (dialog.project) {
+              void library.updateProject(dialog.project.id, input);
+            } else {
+              void library.createProject(input).then((created) => {
+                if (created) setParam({ project: created.id, tab: "overview" });
+              });
             }
             closeDialog();
           }}
@@ -663,8 +682,8 @@ export default function ProjectsPage({
           feature={dialog.feature}
           initial={dialog.initial}
           onSave={(input: FeatureInput) => {
-            if (dialog.feature) library.updateFeature(dialog.feature.id, input);
-            else library.createFeature(selected.id, input);
+            if (dialog.feature) void library.updateFeature(dialog.feature.id, input);
+            else void library.createFeature(selected.id, input);
             closeDialog();
           }}
           onClose={closeDialog}
@@ -676,8 +695,8 @@ export default function ProjectsPage({
           note={dialog.note}
           features={projectFeatures}
           onSave={(input: NoteInput) => {
-            if (dialog.note) library.updateNote(dialog.note.id, input);
-            else library.createNote(selected.id, input);
+            if (dialog.note) void library.updateNote(dialog.note.id, input);
+            else void library.createNote(selected.id, input);
             closeDialog();
           }}
           onClose={closeDialog}
@@ -697,7 +716,7 @@ export default function ProjectsPage({
           installationId={dialog.installationId}
           onPick={(repo) => {
             if (selected) {
-              library.updateProject(selected.id, {
+              void library.updateProject(selected.id, {
                 name: selected.name,
                 description: selected.description,
                 status: selected.status,
@@ -738,7 +757,7 @@ export default function ProjectsPage({
           preview={draft}
           creating={creatingIssue}
           onSaveFeature={(featureDraft) => {
-            library.createFeature(selected.id, {
+            void library.createFeature(selected.id, {
               title: featureDraft.title,
               description: featureDraft.description,
               status: "planned",
