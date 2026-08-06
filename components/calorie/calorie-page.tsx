@@ -332,7 +332,8 @@ export default function CaloriePage() {
       <button
         type="button"
         onClick={() => setDialog({ type: "entry", entry: null })}
-        className="fixed right-4 bottom-4 inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 py-3.5 font-medium text-white shadow-card transition-colors hover:bg-brand-strong sm:right-6 sm:bottom-6"
+        // Dar ekranda alt sekme çubuğunun (3.5rem) üstünde durur
+        className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] inline-flex min-h-11 items-center gap-2 rounded-full bg-brand px-5 py-3.5 font-medium text-white shadow-card transition-colors hover:bg-brand-strong sm:right-6 sm:bottom-6"
       >
         <Plus size={18} aria-hidden="true" />
         Yiyecek ekle

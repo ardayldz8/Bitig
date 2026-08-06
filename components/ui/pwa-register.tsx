@@ -11,6 +11,19 @@ export default function PwaRegister() {
   useEffect(() => {
     if (typeof navigator === "undefined" || !("serviceWorker" in navigator)) return;
 
+    // Geliştirmede kayıt YAPILMAZ: worker uygulama kabuğunu önbelleğe aldığı
+    // için kod değişince eski HTML sunuluyor ve hidrasyon uyuşmazlığı çıkıyor.
+    // Daha önce kaydedilmiş bir worker varsa temizlenir.
+    if (process.env.NODE_ENV !== "production") {
+      void navigator.serviceWorker.getRegistrations().then((registrations) => {
+        for (const registration of registrations) void registration.unregister();
+      });
+      void caches?.keys().then((keys) => {
+        for (const key of keys) if (key.startsWith("bitig-")) void caches.delete(key);
+      });
+      return;
+    }
+
     // Sayfa yüklendikten sonra kaydet — ilk boyamayı geciktirmesin
     const register = () => {
       navigator.serviceWorker.register("/sw.js").catch(() => {

@@ -201,7 +201,8 @@ export default function MediaPage() {
         type="button"
         onClick={() => setDialog({ type: "form", entry: null })}
         aria-label="Yeni dizi veya film ekle"
-        className="fixed right-4 bottom-4 grid h-14 w-14 place-items-center rounded-full bg-brand text-white shadow-card transition-colors hover:bg-brand-strong sm:right-6 sm:bottom-6"
+        // Dar ekranda alt sekme çubuğunun (3.5rem) üstünde durur
+        className="fixed right-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] grid h-14 w-14 place-items-center rounded-full bg-brand text-white shadow-card transition-colors hover:bg-brand-strong sm:right-6 sm:bottom-6"
       >
         <Plus size={24} aria-hidden="true" />
       </button>

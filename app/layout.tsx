@@ -56,7 +56,12 @@ export default function RootLayout({
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="tr">
-      <body className="min-h-dvh antialiased">
+      {/*
+        Dar ekranda üst şerit yok: içerik çentiğin altına girmesin diye üstte
+        safe-area kadar boşluk bırakılır. Altta ise sabit sekme çubuğunun
+        yüksekliği ayrılır, yoksa sayfanın son satırı çubuğun arkasında kalır.
+      */}
+      <body className="min-h-dvh pt-[env(safe-area-inset-top)] pb-[calc(3.5rem+env(safe-area-inset-bottom))] antialiased sm:pt-0 sm:pb-0">
         <SiteNav />
         {children}
         <PwaRegister />
