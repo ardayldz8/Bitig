@@ -1,0 +1,467 @@
+"use client";
+
+import { useCallback, useEffect, useRef, useState } from "react";
+import { checkImageBeforeUpload, prepareImage } from "@/lib/calorie/image";
+import { scaleNutrition, toBaseAmount } from "@/lib/nutrition/calculate-nutrition";
+import { createId } from "@/hooks/use-calorie-tracker";
+import type { AnalysisStage, DetectedFood, ResolvedNutrition } from "@/types/calorie";
+import type { FoodKind, FoodUnit } from "@/types/nutrition";
+
+type VisionItem = {
+  name: string;
+  brand: string | null;
+  estimatedQuantity: number | null;
+  unit: FoodUnit | "unknown";
+  confidence: number;
+  searchQueries: string[];
+};
+
+type VisionResult = {
+  imageType: "meal" | "packaged_product" | "nutrition_label" | "barcode" | "unknown";
+  barcode: string | null;
+  overallConfidence: number;
+  hasUnreadableText: boolean;
+  detectedItems: VisionItem[];
+  needsUserConfirmation: boolean;
+};
+
+export type AnalysisOutcome = {
+  rows: DetectedFood[];
+  /** Hiç yiyecek bulunamadı (boş/alakasız fotoğraf). */
+  noFoodFound: boolean;
+  /** En az bir yiyecek için doğrulanmış besin verisi yok. */
+  hasUnresolved: boolean;
+  lowConfidence: boolean;
+};
+
+export type FoodAnalysis = {
+  stage: AnalysisStage;
+  error: string | null;
+  outcome: AnalysisOutcome | null;
+  isBusy: boolean;
+  analyzeImage: (file: File) => Promise<void>;
+  analyzeBarcode: (barcode: string) => Promise<void>;
+  updateRow: (rowId: string, patch: Partial<DetectedFood>) => void;
+  removeRow: (rowId: string) => void;
+  reset: () => void;
+};
+
+const GENERIC_ERROR = "Bir şeyler ters gitti. Tekrar dener misin?";
+
+export function useFoodAnalysis(): FoodAnalysis {
+  const [stage, setStage] = useState<AnalysisStage>("idle");
+  const [error, setError] = useState<string | null>(null);
+  const [outcome, setOutcome] = useState<AnalysisOutcome | null>(null);
+
+  const abortRef = useRef<AbortController | null>(null);
+  const busyRef = useRef(false);
+  const mountedRef = useRef(true);
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      // Unmount sonrası state güncellemesi yapılmaz, uçan istek iptal edilir
+      mountedRef.current = false;
+      abortRef.current?.abort();
+    };
+  }, []);
+
+  const safeSet = useCallback(<T,>(setter: (value: T) => void, value: T) => {
+    if (mountedRef.current) setter(value);
+  }, []);
+
+  const reset = useCallback(() => {
+    abortRef.current?.abort();
+    abortRef.current = null;
+    busyRef.current = false;
+    setStage("idle");
+    setError(null);
+    setOutcome(null);
+  }, []);
+
+  const runSearch = useCallback(
+    async (
+      items: { name: string; brand: string | null; queries: string[]; barcode: string | null; kind: FoodKind }[],
+      signal: AbortSignal,
+    ): Promise<(ResolvedNutrition | null)[]> => {
+      const response = await fetch("/api/food/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items }),
+        signal,
+      });
+
+      if (!response.ok) return items.map(() => null);
+
+      const data: unknown = await response.json();
+      if (typeof data !== "object" || data === null) return items.map(() => null);
+
+      const matches = (data as { matches?: unknown }).matches;
+      if (!Array.isArray(matches)) return items.map(() => null);
+
+      return items.map((_, index) => {
+        const entry = matches[index];
+        if (typeof entry !== "object" || entry === null) return null;
+        const match = (entry as { match?: unknown }).match;
+        return isResolved(match) ? match : null;
+      });
+    },
+    [],
+  );
+
+  const analyzeImage = useCallback(
+    async (file: File) => {
+      if (busyRef.current) return; // aynı isteğin art arda gönderilmesini engelle
+
+      const localError = checkImageBeforeUpload(file);
+      if (localError) {
+        setError(localError);
+        setStage("error");
+        return;
+      }
+
+      busyRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setError(null);
+      setOutcome(null);
+      safeSet(setStage, "preparing" as AnalysisStage);
+
+      try {
+        const prepared = await prepareImage(file);
+        if (controller.signal.aborted) return;
+
+        safeSet(setStage, "recognizing" as AnalysisStage);
+        const form = new FormData();
+        form.append("image", prepared.file);
+
+        const response = await fetch("/api/food/analyze", {
+          method: "POST",
+          body: form,
+          signal: controller.signal,
+        });
+
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(readError(payload) ?? GENERIC_ERROR);
+        }
+
+        const vision = readVision(payload);
+        if (!vision) throw new Error(GENERIC_ERROR);
+
+        if (vision.detectedItems.length === 0) {
+          safeSet(setOutcome, {
+            rows: [],
+            noFoodFound: true,
+            hasUnresolved: false,
+            lowConfidence: vision.overallConfidence < 0.5,
+          });
+          safeSet(setStage, "done" as AnalysisStage);
+          return;
+        }
+
+        safeSet(setStage, "searching" as AnalysisStage);
+        const requestItems = vision.detectedItems.slice(0, 10).map((item) => ({
+          name: item.name,
+          brand: item.brand,
+          queries: item.searchQueries.length > 0 ? item.searchQueries : [item.name],
+          barcode: vision.barcode,
+          kind: inferKind(vision.imageType, item.brand),
+        }));
+
+        const matches = await runSearch(requestItems, controller.signal);
+        if (controller.signal.aborted) return;
+
+        safeSet(setStage, "calculating" as AnalysisStage);
+        const rows = vision.detectedItems.slice(0, 10).map((item, index) =>
+          buildRow(item, matches[index] ?? null),
+        );
+
+        safeSet(setOutcome, {
+          rows,
+          noFoodFound: false,
+          hasUnresolved: rows.some((row) => row.match === null),
+          lowConfidence: vision.overallConfidence < 0.7 || vision.hasUnreadableText,
+        });
+        safeSet(setStage, "done" as AnalysisStage);
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        safeSet(setError, caught instanceof Error ? caught.message : GENERIC_ERROR);
+        safeSet(setStage, "error" as AnalysisStage);
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [runSearch, safeSet],
+  );
+
+  const analyzeBarcode = useCallback(
+    async (barcode: string) => {
+      if (busyRef.current) return;
+
+      busyRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setError(null);
+      setOutcome(null);
+      safeSet(setStage, "searching" as AnalysisStage);
+
+      try {
+        const response = await fetch("/api/food/barcode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ barcode }),
+          signal: controller.signal,
+        });
+
+        const payload: unknown = await response.json().catch(() => null);
+        if (!response.ok) {
+          throw new Error(readError(payload) ?? GENERIC_ERROR);
+        }
+
+        const match =
+          typeof payload === "object" && payload !== null
+            ? (payload as { match?: unknown }).match
+            : null;
+
+        safeSet(setStage, "calculating" as AnalysisStage);
+
+        if (!isResolved(match)) {
+          safeSet(setOutcome, {
+            rows: [
+              buildRow(
+                {
+                  name: `Barkod ${barcode}`,
+                  brand: null,
+                  estimatedQuantity: 100,
+                  unit: "g",
+                  confidence: 1,
+                  searchQueries: [],
+                },
+                null,
+              ),
+            ],
+            noFoodFound: false,
+            hasUnresolved: true,
+            lowConfidence: false,
+          });
+        } else {
+          safeSet(setOutcome, {
+            rows: [
+              buildRow(
+                {
+                  name: match.name,
+                  brand: match.brand,
+                  estimatedQuantity: match.servingGrams ?? 100,
+                  unit: match.basis,
+                  confidence: 1,
+                  searchQueries: [],
+                },
+                match,
+              ),
+            ],
+            noFoodFound: false,
+            hasUnresolved: false,
+            lowConfidence: false,
+          });
+        }
+        safeSet(setStage, "done" as AnalysisStage);
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        safeSet(setError, caught instanceof Error ? caught.message : GENERIC_ERROR);
+        safeSet(setStage, "error" as AnalysisStage);
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [safeSet],
+  );
+
+  const updateRow = useCallback((rowId: string, patch: Partial<DetectedFood>) => {
+    setOutcome((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rows: prev.rows.map((row) => (row.rowId === rowId ? recalcRow(row, patch) : row)),
+      };
+    });
+  }, []);
+
+  const removeRow = useCallback((rowId: string) => {
+    setOutcome((prev) => {
+      if (!prev) return prev;
+      return { ...prev, rows: prev.rows.filter((row) => row.rowId !== rowId) };
+    });
+  }, []);
+
+  return {
+    stage,
+    error,
+    outcome,
+    isBusy: stage === "preparing" || stage === "recognizing" || stage === "searching" || stage === "calculating",
+    analyzeImage,
+    analyzeBarcode,
+    updateRow,
+    removeRow,
+    reset,
+  };
+}
+
+/** Miktar değişince besin değerleri kaynaktan yeniden hesaplanır. */
+function recalcRow(row: DetectedFood, patch: Partial<DetectedFood>): DetectedFood {
+  const next: DetectedFood = { ...row, ...patch };
+
+  const quantityChanged =
+    patch.quantity !== undefined || patch.unit !== undefined;
+  const macrosTouched =
+    patch.calories !== undefined ||
+    patch.protein !== undefined ||
+    patch.carbohydrates !== undefined ||
+    patch.fat !== undefined;
+
+  if (macrosTouched) {
+    return { ...next, manuallyEdited: true };
+  }
+
+  if (quantityChanged && next.match) {
+    const base = toBaseAmount(next.quantity, next.unit, next.match.servingGrams);
+    if (base !== null) {
+      const scaled = scaleNutrition(
+        {
+          caloriesPer100: next.match.caloriesPer100,
+          proteinPer100: next.match.proteinPer100,
+          carbohydratesPer100: next.match.carbohydratesPer100,
+          fatPer100: next.match.fatPer100,
+          basis: next.match.basis,
+        },
+        base,
+      );
+      return { ...next, ...scaled };
+    }
+  }
+
+  return next;
+}
+
+function buildRow(item: VisionItem, match: ResolvedNutrition | null): DetectedFood {
+  const unit: FoodUnit = item.unit === "unknown" ? (match ? match.basis : "g") : item.unit;
+  const quantity = item.estimatedQuantity && item.estimatedQuantity > 0
+    ? item.estimatedQuantity
+    : unit === "piece" || unit === "portion"
+      ? 1
+      : 100;
+
+  const base = match ? toBaseAmount(quantity, unit, match.servingGrams) : null;
+  const scaled =
+    match && base !== null
+      ? scaleNutrition(
+          {
+            caloriesPer100: match.caloriesPer100,
+            proteinPer100: match.proteinPer100,
+            carbohydratesPer100: match.carbohydratesPer100,
+            fatPer100: match.fatPer100,
+            basis: match.basis,
+          },
+          base,
+        )
+      : { calories: 0, protein: 0, carbohydrates: 0, fat: 0 };
+
+  return {
+    rowId: createId(),
+    name: match?.name ?? item.name,
+    brand: match?.brand ?? item.brand,
+    quantity,
+    unit,
+    match,
+    ...scaled,
+    confidence: item.confidence,
+    manuallyEdited: false,
+  };
+}
+
+function inferKind(imageType: VisionResult["imageType"], brand: string | null): FoodKind {
+  if (imageType === "packaged_product" || imageType === "barcode" || brand) {
+    return "branded_packaged";
+  }
+  if (imageType === "meal") return "turkish_or_restaurant";
+  return "generic_basic";
+}
+
+function readError(payload: unknown): string | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const message = (payload as { error?: unknown }).error;
+  return typeof message === "string" ? message : null;
+}
+
+function readVision(payload: unknown): VisionResult | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const result = (payload as { result?: unknown }).result;
+  if (typeof result !== "object" || result === null) return null;
+
+  const record = result as Record<string, unknown>;
+  if (!Array.isArray(record.detectedItems)) return null;
+
+  const items: VisionItem[] = [];
+  for (const raw of record.detectedItems) {
+    if (typeof raw !== "object" || raw === null) continue;
+    const item = raw as Record<string, unknown>;
+    if (typeof item.name !== "string") continue;
+    items.push({
+      name: item.name,
+      brand: typeof item.brand === "string" ? item.brand : null,
+      estimatedQuantity:
+        typeof item.estimatedQuantity === "number" ? item.estimatedQuantity : null,
+      unit: isUnitLike(item.unit) ? item.unit : "unknown",
+      confidence: typeof item.confidence === "number" ? item.confidence : 0,
+      searchQueries: Array.isArray(item.searchQueries)
+        ? item.searchQueries.filter((query): query is string => typeof query === "string")
+        : [],
+    });
+  }
+
+  return {
+    imageType: isImageType(record.imageType) ? record.imageType : "unknown",
+    barcode: typeof record.barcode === "string" ? record.barcode : null,
+    overallConfidence:
+      typeof record.overallConfidence === "number" ? record.overallConfidence : 0,
+    hasUnreadableText: record.hasUnreadableText === true,
+    detectedItems: items,
+    needsUserConfirmation: record.needsUserConfirmation !== false,
+  };
+}
+
+function isUnitLike(value: unknown): value is FoodUnit | "unknown" {
+  return (
+    value === "g" ||
+    value === "ml" ||
+    value === "piece" ||
+    value === "portion" ||
+    value === "unknown"
+  );
+}
+
+function isImageType(value: unknown): value is VisionResult["imageType"] {
+  return (
+    value === "meal" ||
+    value === "packaged_product" ||
+    value === "nutrition_label" ||
+    value === "barcode" ||
+    value === "unknown"
+  );
+}
+
+function isResolved(value: unknown): value is ResolvedNutrition {
+  if (typeof value !== "object" || value === null) return false;
+  const item = value as Record<string, unknown>;
+  return (
+    typeof item.name === "string" &&
+    typeof item.caloriesPer100 === "number" &&
+    typeof item.proteinPer100 === "number" &&
+    typeof item.carbohydratesPer100 === "number" &&
+    typeof item.fatPer100 === "number" &&
+    (item.basis === "g" || item.basis === "ml") &&
+    typeof item.source === "string"
+  );
+}
