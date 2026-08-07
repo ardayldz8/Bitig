@@ -47,6 +47,21 @@ export function openRouterStatus(): IntegrationStatus {
   return check(["OPENROUTER_API_KEY"]);
 }
 
+/**
+ * Web Push. Açık anahtar tarayıcıya gidiyor (NEXT_PUBLIC_), gizli anahtar
+ * yalnızca sunucuda imzalama için kullanılıyor. VAPID_SUBJECT push
+ * servislerinin zorunlu tuttuğu iletişim adresi (mailto: veya https:).
+ */
+const WEB_PUSH = [
+  "NEXT_PUBLIC_VAPID_PUBLIC_KEY",
+  "VAPID_PRIVATE_KEY",
+  "VAPID_SUBJECT",
+];
+
+export function webPushStatus(): IntegrationStatus {
+  return check(WEB_PUSH);
+}
+
 export const env = {
   supabaseUrl: () => read("NEXT_PUBLIC_SUPABASE_URL"),
   supabaseAnonKey: () => read("NEXT_PUBLIC_SUPABASE_ANON_KEY"),
@@ -64,6 +79,13 @@ export const env = {
 
   openRouterKey: () => read("OPENROUTER_API_KEY"),
   projectModel: () => read("OPENROUTER_PROJECT_MODEL") || "google/gemini-3.5-flash",
+
+  vapidPublicKey: () => read("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
+  vapidPrivateKey: () => read("VAPID_PRIVATE_KEY"),
+  vapidSubject: () => read("VAPID_SUBJECT"),
+
+  /** pg_cron'un gönderim ucunu çağırırken kullandığı paylaşılan sır. */
+  reminderDispatchSecret: () => read("REMINDER_DISPATCH_SECRET"),
 
   appUrl: () => read("NEXT_PUBLIC_APP_URL") || "http://localhost:3000",
 };

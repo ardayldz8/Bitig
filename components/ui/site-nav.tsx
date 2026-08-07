@@ -2,21 +2,27 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Clapperboard, FolderGit2, Flame, Home } from "lucide-react";
+import { BookOpen, Clapperboard, FolderGit2, Flame, Home, NotebookPen } from "lucide-react";
 
+/*
+ * `short`, dar ekrandaki alt çubuk için. Altıncı sekme eklenince sekme başına
+ * ~62px kaldı ve "Dizi / Film" üç nokta ile kesiliyordu; kesik etiket, kısa
+ * ama tam etiketten daha zor okunuyor.
+ */
 const LINKS = [
-  { href: "/", label: "Ana Sayfa", Icon: Home },
-  { href: "/manga", label: "Manga", Icon: BookOpen },
-  { href: "/kalori", label: "Kalori", Icon: Flame },
-  { href: "/dizi-film", label: "Dizi / Film", Icon: Clapperboard },
-  { href: "/projeler", label: "Projeler", Icon: FolderGit2 },
+  { href: "/", label: "Ana Sayfa", short: "Ana", Icon: Home },
+  { href: "/manga", label: "Manga", short: "Manga", Icon: BookOpen },
+  { href: "/kalori", label: "Kalori", short: "Kalori", Icon: Flame },
+  { href: "/dizi-film", label: "Dizi / Film", short: "Dizi", Icon: Clapperboard },
+  { href: "/projeler", label: "Projeler", short: "Proje", Icon: FolderGit2 },
+  { href: "/notlar", label: "Notlar", short: "Notlar", Icon: NotebookPen },
 ] as const;
 
 /**
  * İki ayrı yerleşim:
  *
  * Geniş ekran — üstte yapışkan şerit, etiketler tam.
- * Dar ekran   — altta sekme çubuğu. Beş bağlantı aynı anda görünür (eskiden
+ * Dar ekran   — altta sekme çubuğu. Altı bağlantı aynı anda görünür (eskiden
  *               yatay kaydırma gerekiyordu, "Projeler" ekran dışında kalıyordu)
  *               ve başparmak menzilinde durur. Üst şerit gizlenir; sayfa
  *               başlıkları zaten nerede olunduğunu söylüyor, iki çubuk dar
@@ -77,8 +83,8 @@ export default function SiteNav() {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 backdrop-blur sm:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
-        <ul className="grid grid-cols-5">
-          {LINKS.map(({ href, label, Icon }) => {
+        <ul className="grid grid-cols-6">
+          {LINKS.map(({ href, label, short, Icon }) => {
             const active = isActive(href);
             return (
               <li key={href}>
@@ -97,8 +103,13 @@ export default function SiteNav() {
                     }`}
                   />
                   <Icon size={20} aria-hidden="true" />
-                  <span className="w-full truncate text-center text-[10px] font-medium leading-none">
-                    {label}
+                  {/* Ekran okuyucuya tam etiket gitsin, gözle kısası görünsün */}
+                  <span className="sr-only">{label}</span>
+                  <span
+                    aria-hidden="true"
+                    className="w-full truncate text-center text-[10px] font-medium leading-none"
+                  >
+                    {short}
                   </span>
                 </Link>
               </li>

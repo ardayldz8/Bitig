@@ -9,6 +9,7 @@
 import type { FoodEntry, MealType, NutritionTargets } from "@/types/calorie";
 import type { Manga, MangaStatus } from "@/types/manga";
 import type { MediaEntry, MediaType, WatchStatus } from "@/types/media";
+import type { Note, Reminder } from "@/types/notes";
 import type { FoodUnit, NutritionSource } from "@/types/nutrition";
 
 export type Row = Record<string, unknown>;
@@ -236,5 +237,70 @@ export function mediaEntryToRow(entry: MediaEntry, userId: string): Row {
     release_year: entry.releaseYear,
     created_at: entry.createdAt,
     updated_at: new Date().toISOString(),
+  };
+}
+
+// ---------------------------------------------------------------- Notlar
+
+export function rowToNote(row: Row): Note | null {
+  const id = str(row, "id");
+  if (id === null) return null;
+
+  return {
+    id,
+    title: str(row, "title") ?? "",
+    body: str(row, "body") ?? "",
+    pinned: row.pinned === true,
+    updatedAt: str(row, "updated_at") ?? "",
+  };
+}
+
+export function noteToRow(note: Note, userId: string): Row {
+  return {
+    id: note.id,
+    user_id: userId,
+    title: note.title,
+    body: note.body,
+    pinned: note.pinned,
+    updated_at: new Date().toISOString(),
+  };
+}
+
+/** Postgres `time` alanı "08:30:00" gelir; arayüz "08:30" kullanıyor. */
+function saatiKisalt(value: string): string {
+  const match = value.match(/^(\d{2}):(\d{2})/);
+  return match ? `${match[1]}:${match[2]}` : value;
+}
+
+export function rowToReminder(row: Row): Reminder | null {
+  const id = str(row, "id");
+  const noteId = str(row, "note_id");
+  const time = str(row, "time_of_day");
+  if (id === null || noteId === null || time === null) return null;
+
+  const rawDays = row.days_of_week;
+  const days = Array.isArray(rawDays)
+    ? rawDays.filter((day): day is number => typeof day === "number" && day >= 1 && day <= 7)
+    : [];
+
+  return {
+    id,
+    noteId,
+    time: saatiKisalt(time),
+    days,
+    enabled: row.enabled !== false,
+    timezone: str(row, "timezone") ?? "Europe/Istanbul",
+  };
+}
+
+export function reminderToRow(reminder: Reminder, userId: string): Row {
+  return {
+    id: reminder.id,
+    user_id: userId,
+    note_id: reminder.noteId,
+    time_of_day: reminder.time,
+    days_of_week: reminder.days,
+    enabled: reminder.enabled,
+    timezone: reminder.timezone,
   };
 }

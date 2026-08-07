@@ -9,7 +9,9 @@
  *  - Sürüm değişince eski önbellekler silinir.
  */
 
-const VERSION = "bitig-v1";
+// Sürüm artırıldı: yeni push işleyicileri eski worker'da yok, eski sürüm
+// takılı kalırsa bildirimler hiç gelmez.
+const VERSION = "bitig-v2";
 const SHELL_CACHE = `${VERSION}-shell`;
 
 // Uygulama kabuğu: her sayfanın ihtiyaç duyduğu sabit varlıklar
@@ -19,6 +21,7 @@ const SHELL_ASSETS = [
   "/kalori",
   "/dizi-film",
   "/projeler",
+  "/notlar",
   "/icon-192.png",
   "/icon-512.png",
   "/manifest.webmanifest",
@@ -44,6 +47,58 @@ self.addEventListener("activate", (event) => {
         ),
       )
       .then(() => self.clients.claim()),
+  );
+});
+
+/* ------------------------------------------------------------ Bildirimler */
+
+/**
+ * Sunucudan gelen push mesajı.
+ *
+ * Gövde her zaman JSON: { title, body, url, tag }. Bozuk ya da boş bir gövde
+ * gelirse bildirim yine de gösteriliyor — showNotification çağrılmazsa bazı
+ * tarayıcılar "bu site arka planda güncellendi" diye kendi genel bildirimini
+ * gösteriyor, o da kullanıcıya anlamsız geliyor.
+ */
+self.addEventListener("push", (event) => {
+  let veri = {};
+  try {
+    veri = event.data ? event.data.json() : {};
+  } catch {
+    veri = {};
+  }
+
+  const baslik = veri.title || "Bitig";
+  const secenekler = {
+    body: veri.body || "",
+    icon: "/icon-192.png",
+    badge: "/icon-192.png",
+    // Aynı tag'li bildirim üst üste yığılmaz, sonuncusu öncekini değiştirir
+    tag: veri.tag || "bitig-hatirlatma",
+    // Titreşim, telefon sessizdeyken bile fark edilmesini sağlıyor
+    vibrate: [120, 60, 120],
+    data: { url: veri.url || "/notlar" },
+  };
+
+  event.waitUntil(self.registration.showNotification(baslik, secenekler));
+});
+
+/** Bildirime dokunulunca: açık sekme varsa ona odaklan, yoksa yenisini aç. */
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const hedef = (event.notification.data && event.notification.data.url) || "/notlar";
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        // Zaten açık bir Bitig sekmesi varsa yenisini açmak yerine oraya git
+        if (client.url.startsWith(self.location.origin) && "focus" in client) {
+          client.navigate(hedef);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(hedef);
+    }),
   );
 });
 
