@@ -143,7 +143,7 @@ export default function MediaPage() {
   );
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-28 sm:px-6 sm:pt-10">
+    <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-12 sm:px-6 sm:pt-10">
       <MediaHeader
         total={library.entries.length}
         onAdd={() => setDialog({ type: "form", entry: null })}

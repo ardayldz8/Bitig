@@ -21,6 +21,7 @@ const RESTORE_ORDER = [
   // notes önce: note_reminders ona yabancı anahtarla bağlı
   "notes",
   "note_reminders",
+  "subscriptions",
   "projects",
   "project_features",
   "project_notes",
@@ -37,6 +38,7 @@ const USER_SCOPED = new Set<string>([
   "nutrition_targets",
   "notes",
   "note_reminders",
+  "subscriptions",
   "projects",
 ]);
 

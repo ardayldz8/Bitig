@@ -60,7 +60,7 @@ export default function NotesPage({ vapidPublicKey }: { vapidPublicKey: string }
   };
 
   return (
-    <main className="mx-auto max-w-[1100px] px-4 pb-28 pt-6 sm:px-6 sm:pb-12">
+    <main className="mx-auto max-w-[1100px] px-4 pb-12 pt-6 sm:px-6 sm:pb-12">
       <header className="mb-5">
         <h1 className="text-2xl font-semibold text-ink">Notlar</h1>
         <p className="mt-1 text-sm text-ink-soft">

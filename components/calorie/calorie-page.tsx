@@ -200,7 +200,7 @@ export default function CaloriePage() {
   );
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-28 sm:px-6 sm:pt-10">
+    <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-12 sm:px-6 sm:pt-10">
       <header>
         {/* Marka alanı üstteki gezinme çubuğunda */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

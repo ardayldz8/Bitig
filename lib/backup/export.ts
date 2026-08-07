@@ -33,11 +33,17 @@ const USER_TABLES = [
   "nutrition_targets",
   "notes",
   "note_reminders",
+  "subscriptions",
   "projects",
   "github_installations",
 ] as const;
 
 /*
+ * `subscription_notices` de yok: hangi ödeme için hangi bildirimin
+ * gönderildiğini tutan işletim kaydı, kullanıcı verisi değil. Geri
+ * yüklendiğinde tek etkisi geçmiş bildirimlerin tekrarlanmaması olurdu —
+ * o tarihler zaten geçmiş.
+ *
  * `push_subscriptions` bilerek yok.
  *
  * Cihaza özgü: her abonelik belirli bir tarayıcının push servisindeki uca

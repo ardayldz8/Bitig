@@ -61,7 +61,7 @@ export default function MangaPage() {
   const isSearching = query.trim().length > 0;
 
   return (
-    <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-28 sm:px-6 sm:pt-10">
+    <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-12 sm:px-6 sm:pt-10">
       <header>
         {/* Marka alanı üstteki gezinme çubuğunda; burada tekrarlanmaz */}
         <div className="flex justify-end">

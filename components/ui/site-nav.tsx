@@ -1,122 +1,129 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Clapperboard, FolderGit2, Flame, Home, NotebookPen } from "lucide-react";
+import {
+  BookOpen,
+  Clapperboard,
+  CreditCard,
+  Flame,
+  FolderGit2,
+  Home,
+  Menu,
+  NotebookPen,
+  X,
+} from "lucide-react";
 
-/*
- * `short`, dar ekrandaki alt çubuk için. Altıncı sekme eklenince sekme başına
- * ~62px kaldı ve "Dizi / Film" üç nokta ile kesiliyordu; kesik etiket, kısa
- * ama tam etiketten daha zor okunuyor.
- */
 const LINKS = [
-  { href: "/", label: "Ana Sayfa", short: "Ana", Icon: Home },
-  { href: "/manga", label: "Manga", short: "Manga", Icon: BookOpen },
-  { href: "/kalori", label: "Kalori", short: "Kalori", Icon: Flame },
-  { href: "/dizi-film", label: "Dizi / Film", short: "Dizi", Icon: Clapperboard },
-  { href: "/projeler", label: "Projeler", short: "Proje", Icon: FolderGit2 },
-  { href: "/notlar", label: "Notlar", short: "Notlar", Icon: NotebookPen },
+  { href: "/", label: "Ana Sayfa", Icon: Home },
+  { href: "/manga", label: "Manga", Icon: BookOpen },
+  { href: "/kalori", label: "Kalori", Icon: Flame },
+  { href: "/dizi-film", label: "Dizi / Film", Icon: Clapperboard },
+  { href: "/projeler", label: "Projeler", Icon: FolderGit2 },
+  { href: "/notlar", label: "Notlar", Icon: NotebookPen },
+  { href: "/abonelikler", label: "Abonelikler", Icon: CreditCard },
 ] as const;
 
 /**
- * İki ayrı yerleşim:
+ * Sağ üstte tek bir açılır menü — hem dar hem geniş ekranda.
  *
- * Geniş ekran — üstte yapışkan şerit, etiketler tam.
- * Dar ekran   — altta sekme çubuğu. Altı bağlantı aynı anda görünür (eskiden
- *               yatay kaydırma gerekiyordu, "Projeler" ekran dışında kalıyordu)
- *               ve başparmak menzilinde durur. Üst şerit gizlenir; sayfa
- *               başlıkları zaten nerede olunduğunu söylüyor, iki çubuk dar
- *               ekranda boşuna dikey alan yiyordu.
+ * Önce üstte yatay şerit + altta sekme çubuğu vardı. Sayfa sayısı yediye
+ * çıkınca ikisi de sığmıyor: 375 px'lik ekranda alt çubukta sekme başına
+ * ~53 px kalıyor ve etiketler okunamayacak kadar kısalıyordu. Açılır menü
+ * sayfa sayısından bağımsız çalışıyor.
+ *
+ * Bağlantılar `prefetch`: menü açıldığı anda hedef sayfaların kodu arka
+ * planda geliyor, tıklamada bekleme kalmıyor.
  */
 export default function SiteNav() {
   const pathname = usePathname();
-  const isActive = (href: string) => pathname === href;
+  const [acik, setAcik] = useState(false);
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  const aktif = LINKS.find((link) => link.href === pathname);
+
+  useEffect(() => {
+    if (!acik) return;
+
+    const disariTiklama = (event: MouseEvent) => {
+      if (!panelRef.current?.contains(event.target as Node)) setAcik(false);
+    };
+    const escBasimi = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAcik(false);
+    };
+
+    document.addEventListener("mousedown", disariTiklama);
+    document.addEventListener("keydown", escBasimi);
+    return () => {
+      document.removeEventListener("mousedown", disariTiklama);
+      document.removeEventListener("keydown", escBasimi);
+    };
+  }, [acik]);
 
   return (
-    <>
-      <nav
-        aria-label="Sayfalar"
-        className="sticky top-0 z-30 hidden border-b border-line bg-canvas/90 backdrop-blur sm:block"
-      >
-        <div className="mx-auto flex max-w-[1100px] items-center gap-3 px-6 py-2.5">
-          <Link
-            href="/"
-            className="flex min-h-11 shrink-0 items-center gap-2 rounded-lg pr-1 text-ink"
+    <nav
+      aria-label="Sayfalar"
+      className="sticky top-0 z-40 border-b border-line bg-canvas/90 backdrop-blur"
+    >
+      <div className="mx-auto flex max-w-[1100px] items-center gap-3 px-4 py-2.5 sm:px-6">
+        <Link href="/" className="flex min-h-11 shrink-0 items-center gap-2 text-ink">
+          <span
+            aria-hidden="true"
+            className="grid h-8 w-8 place-items-center rounded-lg bg-brand text-sm font-bold text-white"
           >
-            <span
-              aria-hidden="true"
-              className="grid h-8 w-8 place-items-center rounded-lg bg-brand text-sm font-bold text-white"
+            B
+          </span>
+          <span className="text-base font-semibold">Bitig</span>
+        </Link>
+
+        {/* Nerede olunduğu menüyü açmadan görünsün */}
+        <span className="min-w-0 flex-1 truncate text-sm text-ink-soft">
+          {aktif && aktif.href !== "/" ? aktif.label : ""}
+        </span>
+
+        <div ref={panelRef} className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setAcik((a) => !a)}
+            aria-expanded={acik}
+            aria-haspopup="menu"
+            aria-label={acik ? "Menüyü kapat" : "Menüyü aç"}
+            className="grid h-11 w-11 place-items-center rounded-xl border border-line bg-surface text-ink transition-colors hover:border-brand hover:text-brand"
+          >
+            {acik ? <X size={20} /> : <Menu size={20} />}
+          </button>
+
+          {acik && (
+            <div
+              role="menu"
+              className="absolute right-0 top-full z-50 mt-2 w-56 overflow-hidden rounded-2xl border border-line bg-surface shadow-card"
             >
-              B
-            </span>
-            <span className="text-base font-semibold">Bitig</span>
-          </Link>
-
-          {/* Sığmazsa alt satıra sarar — yatay kaydırma bandı yerine. */}
-          <div className="flex min-w-0 flex-1 flex-wrap justify-end gap-1">
-            {LINKS.map(({ href, label, Icon }) => {
-              const active = isActive(href);
-              return (
-                <Link
-                  key={href}
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className={`inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full px-3.5 text-sm font-medium transition-colors ${
-                    active
-                      ? "bg-brand text-white"
-                      : "text-ink-soft hover:bg-brand-soft hover:text-brand"
-                  }`}
-                >
-                  <Icon size={16} aria-hidden="true" />
-                  {label}
-                </Link>
-              );
-            })}
-          </div>
-        </div>
-      </nav>
-
-      {/* Dar ekran: alt sekme çubuğu. Ana ekrana eklenmiş PWA'da çene/gesture
-          alanına denk gelmemesi için safe-area kadar iç boşluk bırakılır. */}
-      <nav
-        aria-label="Sayfalar"
-        className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-canvas/95 backdrop-blur sm:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <ul className="grid grid-cols-6">
-          {LINKS.map(({ href, label, short, Icon }) => {
-            const active = isActive(href);
-            return (
-              <li key={href}>
-                <Link
-                  href={href}
-                  aria-current={active ? "page" : undefined}
-                  className={`relative flex min-h-[3.5rem] flex-col items-center justify-center gap-1 px-0.5 pt-1.5 pb-1 transition-colors ${
-                    active ? "text-brand" : "text-ink-soft"
-                  }`}
-                >
-                  {/* Aktif sekme yalnızca renkle ayrılmasın */}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute inset-x-3 top-0 h-0.5 rounded-b-full ${
-                      active ? "bg-brand" : "bg-transparent"
+              {LINKS.map(({ href, label, Icon }) => {
+                const secili = pathname === href;
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    role="menuitem"
+                    prefetch
+                    onClick={() => setAcik(false)}
+                    aria-current={secili ? "page" : undefined}
+                    className={`flex min-h-12 items-center gap-3 px-4 text-sm font-medium transition-colors ${
+                      secili
+                        ? "bg-brand-soft text-brand"
+                        : "text-ink hover:bg-brand-soft hover:text-brand"
                     }`}
-                  />
-                  <Icon size={20} aria-hidden="true" />
-                  {/* Ekran okuyucuya tam etiket gitsin, gözle kısası görünsün */}
-                  <span className="sr-only">{label}</span>
-                  <span
-                    aria-hidden="true"
-                    className="w-full truncate text-center text-[10px] font-medium leading-none"
                   >
-                    {short}
-                  </span>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-    </>
+                    <Icon size={17} aria-hidden="true" />
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </nav>
   );
 }
