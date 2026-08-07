@@ -71,6 +71,19 @@ export default function AnalysisResult({
         </p>
       )}
 
+      {/* Metinden çıkarılamayan noktalar. Model miktar uydurmadığı için
+          bunları kullanıcının doldurması gerekiyor. */}
+      {outcome.unclear && outcome.unclear.length > 0 && (
+        <div className="mt-2 rounded-xl bg-amber-100 px-3.5 py-2.5 text-sm text-amber-800">
+          <p className="font-medium">Şunları netleştirmen gerekiyor:</p>
+          <ul className="mt-1 list-inside list-disc">
+            {outcome.unclear.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       {/* Geçici erişim sorunu, kalıcı "bulunamadı"dan ayrı gösterilir:
           biri birkaç dakikada geçer, diğeri manuel giriş gerektirir. */}
       {outcome.sourceUnavailable && (

@@ -79,6 +79,17 @@ export default function DetectedFoodRow({
         </p>
       )}
 
+      {/* Kaynak var ama "adet"in kaç gram olduğu bilinmiyor. Değerler 0 kalır;
+          bunu gerçek bir 0'dan ayırt edilebilir kılmak gerekiyor. */}
+      {row.match && row.needsQuantity && (
+        <p className="mt-3 flex items-start gap-2 rounded-lg bg-amber-100 px-3 py-2 text-sm text-amber-800">
+          <TriangleAlert size={16} aria-hidden="true" className="mt-0.5 shrink-0" />
+          Bir {row.unit === "piece" ? "adedin" : "porsiyonun"} kaç gram olduğu
+          bilinmiyor, bu yüzden değerler hesaplanamadı. Miktarı gram cinsinden
+          gir.
+        </p>
+      )}
+
       {editing ? (
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>

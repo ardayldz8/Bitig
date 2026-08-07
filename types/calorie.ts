@@ -94,6 +94,15 @@ export type DetectedFood = {
   unit: FoodUnit;
   /** Besin kaynağı bulunamadıysa null — kullanıcı manuel girer. */
   match: ResolvedNutrition | null;
+  /**
+   * Kaynak bulundu ama miktar onun birimine çevrilemedi.
+   *
+   * Tipik durum: kullanıcı "iki dilim" diyor, kaynak 100 gram üzerinden veri
+   * veriyor ve bir dilimin kaç gram olduğu bilinmiyor. Böyle bir satırda
+   * değerler 0 çıkıyordu ve bu, gerçekten 0 kalorili bir yiyecekten ayırt
+   * edilemiyordu. Artık işaretlenip kullanıcıdan gram isteniyor.
+   */
+  needsQuantity: boolean;
   calories: number;
   protein: number;
   carbohydrates: number;

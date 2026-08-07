@@ -2,19 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { checkImageBeforeUpload, prepareImage } from "@/lib/calorie/image";
-import { scaleNutrition, toBaseAmount } from "@/lib/nutrition/calculate-nutrition";
-import { createId } from "@/hooks/use-calorie-tracker";
+import { buildRow, recalcRow, type DetectedItem } from "@/lib/calorie/rows";
 import type { AnalysisStage, DetectedFood, ResolvedNutrition } from "@/types/calorie";
 import type { FoodKind, FoodUnit } from "@/types/nutrition";
 
-type VisionItem = {
-  name: string;
-  brand: string | null;
-  estimatedQuantity: number | null;
-  unit: FoodUnit | "unknown";
-  confidence: number;
-  searchQueries: string[];
-};
+/** Hem görsel hem metin akışı aynı yapıyı üretir. */
+type VisionItem = DetectedItem;
 
 type VisionResult = {
   imageType: "meal" | "packaged_product" | "nutrition_label" | "barcode" | "unknown";
@@ -32,6 +25,8 @@ export type AnalysisOutcome = {
   /** En az bir yiyecek için doğrulanmış besin verisi yok. */
   hasUnresolved: boolean;
   lowConfidence: boolean;
+  /** Metinden çıkarılamayan noktalar (ör. "kaşar peyniri miktarı"). */
+  unclear?: string[];
   /**
    * Besin kaynağı geçici olarak yanıt vermedi (hız sınırı).
    * "Bulunamadı"dan ayrı tutulur: biri kalıcı, diğeri birkaç dakikalık.
@@ -46,6 +41,8 @@ export type FoodAnalysis = {
   isBusy: boolean;
   analyzeImage: (file: File) => Promise<void>;
   analyzeBarcode: (barcode: string) => Promise<void>;
+  /** Serbest metinden ("iki dilim tost yedim") yiyecek çıkarır. */
+  analyzeDescription: (text: string) => Promise<void>;
   updateRow: (rowId: string, patch: Partial<DetectedFood>) => void;
   removeRow: (rowId: string) => void;
   reset: () => void;
@@ -212,6 +209,127 @@ export function useFoodAnalysis(): FoodAnalysis {
     [runSearch, safeSet],
   );
 
+  /**
+   * Serbest metinden yiyecek ekleme.
+   *
+   * Fotoğraf akışıyla aynı boru hattını kullanır: model yalnızca ne yendiğini
+   * çıkarır, besin değerleri yine `/api/food/search` üzerinden kaynaklardan
+   * gelir. Miktarı belirtilmemiş maddeler `unclear` olarak işaretlenir ve
+   * kullanıcıya sorulur — tahmin uydurulmaz.
+   */
+  const analyzeDescription = useCallback(
+    async (text: string) => {
+      if (busyRef.current) return;
+
+      const temiz = text.trim();
+      if (temiz.length < 3) {
+        setError("Ne yediğini birkaç kelimeyle yaz.");
+        setStage("error");
+        return;
+      }
+
+      busyRef.current = true;
+      const controller = new AbortController();
+      abortRef.current = controller;
+
+      setError(null);
+      setOutcome(null);
+      safeSet(setStage, "recognizing" as AnalysisStage);
+
+      try {
+        const response = await fetch("/api/food/describe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: temiz }),
+          signal: controller.signal,
+        });
+        const payload: unknown = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          const message =
+            typeof payload === "object" && payload !== null
+              ? (payload as { error?: unknown }).error
+              : null;
+          throw new Error(typeof message === "string" ? message : GENERIC_ERROR);
+        }
+
+        const result =
+          typeof payload === "object" && payload !== null
+            ? (payload as { result?: unknown }).result
+            : null;
+        const record =
+          typeof result === "object" && result !== null
+            ? (result as {
+                items?: unknown;
+                unclear?: unknown;
+                noFoodFound?: unknown;
+                overallConfidence?: unknown;
+              })
+            : null;
+
+        const items = Array.isArray(record?.items) ? record.items : [];
+        if (controller.signal.aborted) return;
+
+        if (record?.noFoodFound === true || items.length === 0) {
+          safeSet(setOutcome, {
+            rows: [],
+            noFoodFound: true,
+            hasUnresolved: false,
+            lowConfidence: false,
+          });
+          safeSet(setStage, "done" as AnalysisStage);
+          return;
+        }
+
+        const normalized = items
+          .map(toVisionItem)
+          .filter((item): item is VisionItem => item !== null)
+          .slice(0, 10);
+
+        safeSet(setStage, "searching" as AnalysisStage);
+        const { matches, warning } = await runSearch(
+          normalized.map((item) => ({
+            name: item.name,
+            brand: item.brand,
+            queries: item.searchQueries.length > 0 ? item.searchQueries : [item.name],
+            barcode: null,
+            kind: inferKind("meal", item.brand),
+          })),
+          controller.signal,
+        );
+        if (controller.signal.aborted) return;
+
+        safeSet(setStage, "calculating" as AnalysisStage);
+        const rows = normalized.map((item, index) => buildRow(item, matches[index] ?? null));
+
+        const belirsiz = Array.isArray(record?.unclear)
+          ? record.unclear.filter((item): item is string => typeof item === "string")
+          : [];
+
+        safeSet(setOutcome, {
+          rows,
+          noFoodFound: false,
+          hasUnresolved: rows.some((row) => row.match === null),
+          lowConfidence:
+            typeof record?.overallConfidence === "number"
+              ? record.overallConfidence < 0.7
+              : false,
+          sourceUnavailable: warning,
+          // Modelin metinden çıkaramadığı noktalar kullanıcıya gösterilir
+          unclear: belirsiz.length > 0 ? belirsiz : undefined,
+        });
+        safeSet(setStage, "done" as AnalysisStage);
+      } catch (caught) {
+        if (controller.signal.aborted) return;
+        safeSet(setError, caught instanceof Error ? caught.message : GENERIC_ERROR);
+        safeSet(setStage, "error" as AnalysisStage);
+      } finally {
+        busyRef.current = false;
+      }
+    },
+    [runSearch, safeSet],
+  );
+
   const analyzeBarcode = useCallback(
     async (barcode: string) => {
       if (busyRef.current) return;
@@ -319,94 +437,10 @@ export function useFoodAnalysis(): FoodAnalysis {
     isBusy: stage === "preparing" || stage === "recognizing" || stage === "searching" || stage === "calculating",
     analyzeImage,
     analyzeBarcode,
+    analyzeDescription,
     updateRow,
     removeRow,
     reset,
-  };
-}
-
-/** Miktar değişince besin değerleri kaynaktan yeniden hesaplanır. */
-function recalcRow(row: DetectedFood, patch: Partial<DetectedFood>): DetectedFood {
-  const next: DetectedFood = { ...row, ...patch };
-
-  const quantityChanged =
-    patch.quantity !== undefined || patch.unit !== undefined;
-  const macrosTouched =
-    patch.calories !== undefined ||
-    patch.protein !== undefined ||
-    patch.carbohydrates !== undefined ||
-    patch.fat !== undefined;
-
-  // Elle düzenlemede orijinal (kaynak) değerlere DOKUNULMAZ
-  if (macrosTouched) {
-    return { ...next, manuallyEdited: true };
-  }
-
-  if (quantityChanged && next.match) {
-    const base = toBaseAmount(next.quantity, next.unit, next.match.servingGrams);
-    if (base !== null) {
-      const scaled = scaleNutrition(
-        {
-          caloriesPer100: next.match.caloriesPer100,
-          proteinPer100: next.match.proteinPer100,
-          carbohydratesPer100: next.match.carbohydratesPer100,
-          fatPer100: next.match.fatPer100,
-          basis: next.match.basis,
-        },
-        base,
-      );
-      // Miktar değişti: hem gösterilen hem orijinal değer kaynaktan tazelenir
-      return {
-        ...next,
-        ...scaled,
-        originalCalories: scaled.calories,
-        originalProtein: scaled.protein,
-        originalCarbohydrates: scaled.carbohydrates,
-        originalFat: scaled.fat,
-      };
-    }
-  }
-
-  return next;
-}
-
-function buildRow(item: VisionItem, match: ResolvedNutrition | null): DetectedFood {
-  const unit: FoodUnit = item.unit === "unknown" ? (match ? match.basis : "g") : item.unit;
-  const quantity = item.estimatedQuantity && item.estimatedQuantity > 0
-    ? item.estimatedQuantity
-    : unit === "piece" || unit === "portion"
-      ? 1
-      : 100;
-
-  const base = match ? toBaseAmount(quantity, unit, match.servingGrams) : null;
-  const scaled =
-    match && base !== null
-      ? scaleNutrition(
-          {
-            caloriesPer100: match.caloriesPer100,
-            proteinPer100: match.proteinPer100,
-            carbohydratesPer100: match.carbohydratesPer100,
-            fatPer100: match.fatPer100,
-            basis: match.basis,
-          },
-          base,
-        )
-      : { calories: 0, protein: 0, carbohydrates: 0, fat: 0 };
-
-  return {
-    rowId: createId(),
-    name: match?.name ?? item.name,
-    brand: match?.brand ?? item.brand,
-    quantity,
-    unit,
-    match,
-    ...scaled,
-    originalCalories: match ? scaled.calories : null,
-    originalProtein: match ? scaled.protein : null,
-    originalCarbohydrates: match ? scaled.carbohydrates : null,
-    originalFat: match ? scaled.fat : null,
-    confidence: item.confidence,
-    manuallyEdited: false,
   };
 }
 
@@ -424,6 +458,30 @@ function readError(payload: unknown): string | null {
   return typeof message === "string" ? message : null;
 }
 
+/**
+ * Modelden gelen tek bir yiyecek maddesini normalleştirir.
+ *
+ * Hem görsel hem metin akışı aynı yapıyı üretiyor; ayrıştırma tek yerde
+ * tutuluyor ki biri değişince diğeri sessizce geride kalmasın.
+ */
+function toVisionItem(raw: unknown): VisionItem | null {
+  if (typeof raw !== "object" || raw === null) return null;
+  const item = raw as Record<string, unknown>;
+  if (typeof item.name !== "string" || item.name.length === 0) return null;
+
+  return {
+    name: item.name,
+    brand: typeof item.brand === "string" ? item.brand : null,
+    estimatedQuantity:
+      typeof item.estimatedQuantity === "number" ? item.estimatedQuantity : null,
+    unit: isUnitLike(item.unit) ? item.unit : "unknown",
+    confidence: typeof item.confidence === "number" ? item.confidence : 0,
+    searchQueries: Array.isArray(item.searchQueries)
+      ? item.searchQueries.filter((query): query is string => typeof query === "string")
+      : [],
+  };
+}
+
 function readVision(payload: unknown): VisionResult | null {
   if (typeof payload !== "object" || payload === null) return null;
   const result = (payload as { result?: unknown }).result;
@@ -432,23 +490,9 @@ function readVision(payload: unknown): VisionResult | null {
   const record = result as Record<string, unknown>;
   if (!Array.isArray(record.detectedItems)) return null;
 
-  const items: VisionItem[] = [];
-  for (const raw of record.detectedItems) {
-    if (typeof raw !== "object" || raw === null) continue;
-    const item = raw as Record<string, unknown>;
-    if (typeof item.name !== "string") continue;
-    items.push({
-      name: item.name,
-      brand: typeof item.brand === "string" ? item.brand : null,
-      estimatedQuantity:
-        typeof item.estimatedQuantity === "number" ? item.estimatedQuantity : null,
-      unit: isUnitLike(item.unit) ? item.unit : "unknown",
-      confidence: typeof item.confidence === "number" ? item.confidence : 0,
-      searchQueries: Array.isArray(item.searchQueries)
-        ? item.searchQueries.filter((query): query is string => typeof query === "string")
-        : [],
-    });
-  }
+  const items = record.detectedItems
+    .map(toVisionItem)
+    .filter((item): item is VisionItem => item !== null);
 
   return {
     imageType: isImageType(record.imageType) ? record.imageType : "unknown",

@@ -5,6 +5,7 @@ import { BarChart3, Plus } from "lucide-react";
 import AnalysisResult from "@/components/calorie/analysis-result";
 import DailySummary from "@/components/calorie/daily-summary";
 import FoodEntryModal, { type EntryPrefill } from "@/components/calorie/food-entry-modal";
+import DescribeFood from "@/components/calorie/describe-food";
 import FoodScanner from "@/components/calorie/food-scanner";
 import MacroProgress from "@/components/calorie/macro-progress";
 import MealSection from "@/components/calorie/meal-section";
@@ -262,6 +263,17 @@ export default function CaloriePage() {
               onRetry={handleRetry}
             />
           </div>
+
+          {/* Sonuç incelenirken metin alanı gizlenir: iki farklı giriş
+              aynı anda açık kalırsa hangisinin sonucuna bakıldığı belirsizleşir. */}
+          {analysis.stage !== "done" && (
+            <div className="mt-4">
+              <DescribeFood
+                onSubmit={(text) => void analysis.analyzeDescription(text)}
+                disabled={analysis.isBusy || labelBusy}
+              />
+            </div>
+          )}
 
           {analysis.stage === "done" && analysis.outcome && (
             <div className="mt-4">
