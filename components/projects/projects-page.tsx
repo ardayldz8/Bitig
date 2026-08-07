@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Github } from "lucide-react";
 import Modal from "@/components/ui/modal";
@@ -23,6 +23,7 @@ import ProjectTasks from "@/components/projects/project-tasks";
 import ProjectsHeader from "@/components/projects/projects-header";
 import RepositoryPicker from "@/components/projects/repository-picker";
 import { useAuth } from "@/components/auth/auth-provider";
+import { useInitialSelection } from "@/hooks/use-initial-selection";
 import { useProjects } from "@/hooks/use-projects";
 import { useActionParam } from "@/hooks/use-action-param";
 import { useGithubInstallation } from "@/hooks/use-github-installation";
@@ -104,39 +105,35 @@ export default function ProjectsPage({
     [library.projects, selectedId],
   );
 
-  /** Seçili proje ve sekme URL'de tutulur → yenilemede kaybolmaz. */
+  /**
+   * Seçili proje ve sekme URL'de tutulur → yenilemede kaybolmaz.
+   *
+   * Varsayılan `replace`. `push` YALNIZCA proje seçilirken kullanılıyor:
+   * telefonun geri tuşu detaydan listeye dönebilsin diye bir geçmiş kaydı
+   * gerekiyor. Sekme değişimlerinde de push edilseydi, sayfadan çıkmak için
+   * arka arkaya beş kez geri basmak gerekirdi.
+   */
   const setParam = useCallback(
-    (updates: Record<string, string | null>) => {
+    (updates: Record<string, string | null>, history: "push" | "replace" = "replace") => {
       const next = new URLSearchParams(params.toString());
       for (const [key, value] of Object.entries(updates)) {
         if (value === null) next.delete(key);
         else next.set(key, value);
       }
-      router.replace(`/projeler?${next.toString()}`, { scroll: false });
+      const url = `/projeler?${next.toString()}`;
+      if (history === "push") router.push(url, { scroll: false });
+      else router.replace(url, { scroll: false });
     },
     [params, router],
   );
 
-  /**
-   * Açılışta ilk projeyi seç — YALNIZCA BİR KEZ.
-   *
-   * Ref olmadan "Projelere dön" çalışmıyordu: düğme seçimi temizliyor,
-   * selectedId null oluyor ve bu effect aynı anda ilk projeyi geri seçiyordu.
-   * Kullanıcı açısından düğme hiç tepki vermemiş gibi görünüyordu.
-   *
-   * Karar hydrate olur olmaz veriliyor (proje listesi boş olsa bile): aksi
-   * hâlde ilk proje oluşturulduğunda bayrak hâlâ kapalı kalıyor ve aynı hata
-   * o anda geri geliyordu.
-   */
-  const ilkSecimYapildi = useRef(false);
-  useEffect(() => {
-    if (ilkSecimYapildi.current || !library.hydrated) return;
-    ilkSecimYapildi.current = true;
-
-    // Derin bağlantıyla gelinmişse ya da hiç proje yoksa dokunma
-    if (selectedId || library.projects.length === 0) return;
-    setParam({ project: library.projects[0].id });
-  }, [library.hydrated, library.projects, selectedId, setParam]);
+  // Açılışta ilk projeyi seç — yalnızca bir kez; ayrıntı hook'ta.
+  useInitialSelection({
+    hydrated: library.hydrated,
+    firstId: library.projects[0]?.id ?? null,
+    selectedId,
+    onSelect: useCallback((id: string) => setParam({ project: id }), [setParam]),
+  });
 
   /**
    * Kaydedilmiş GitHub anlık görüntülerini yükle.
@@ -624,7 +621,8 @@ export default function ProjectsPage({
               featureCounts={featureCounts}
               onQueryChange={setQuery}
               onFilterChange={setFilter}
-              onSelect={(id) => setParam({ project: id, tab: "overview" })}
+              // push: geri tuşu detaydan listeye dönebilsin
+              onSelect={(id) => setParam({ project: id, tab: "overview" }, "push")}
             />
           </div>
 
