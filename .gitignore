@@ -20,3 +20,6 @@ next-env.d.ts
 *.pem
 npm-debug.log*
 yarn-error.log*
+
+# Kurulum sirasinda uretilen, gizli deger iceren gecici dosyalar
+kurulum-gecici/
