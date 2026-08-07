@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useId, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { Github } from "lucide-react";
 import Modal from "@/components/ui/modal";
 import AiDraftPreview, { type DraftPreview } from "@/components/projects/ai-draft-preview";
 import FeatureFormModal from "@/components/projects/feature-form-modal";
@@ -523,15 +524,32 @@ export default function ProjectsPage({
         <div className="mt-6 rounded-card border border-dashed border-line-strong bg-surface p-10 text-center">
           <p className="font-medium text-ink">Henüz proje yok</p>
           <p className="mt-1.5 text-sm text-ink-soft">
-            İlk projeni oluştur ya da GitHub&apos;ı bağlayıp bir repository&apos;den başla.
+            {githubConnected
+              ? "Boş bir proje oluştur ya da GitHub repository'lerinden birini seç."
+              : "İlk projeni oluştur. GitHub'ı bağlarsan repository'lerinden de başlayabilirsin."}
           </p>
-          <button
-            type="button"
-            onClick={() => setDialog({ type: "project", project: null })}
-            className="mt-5 inline-flex min-h-11 items-center rounded-xl bg-brand px-4 font-medium text-white"
-          >
-            İlk projeyi oluştur
-          </button>
+          <div className="mt-5 flex flex-col justify-center gap-2 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setDialog({ type: "project", project: null })}
+              className="inline-flex min-h-11 items-center justify-center rounded-xl bg-brand px-4 font-medium text-white transition-colors hover:bg-brand-strong"
+            >
+              Boş proje oluştur
+            </button>
+
+            {/* Bağlantı yoksa gösterilmez: tıklanınca hiçbir şey yapmayan bir
+                düğme, olmayan düğmeden daha kötü. */}
+            {githubConnected && installationId !== null && (
+              <button
+                type="button"
+                onClick={() => setDialog({ type: "repos", installationId })}
+                className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-line px-4 font-medium text-ink transition-colors hover:border-brand hover:text-brand"
+              >
+                <Github size={16} aria-hidden="true" />
+                Repository&apos;den oluştur
+              </button>
+            )}
+          </div>
         </div>
       ) : (
         <div className="mt-6 grid gap-4 lg:grid-cols-[300px_1fr]">
@@ -766,6 +784,7 @@ export default function ProjectsPage({
           accessToken={library.accessToken}
           onPick={(repo) => {
             if (selected) {
+              // Seçili projeye repo bağla
               void library.updateProject(selected.id, {
                 name: selected.name,
                 description: selected.description,
@@ -773,6 +792,23 @@ export default function ProjectsPage({
                 technologies: selected.technologies,
                 githubFullName: repo.fullName,
               });
+            } else {
+              // Seçili proje yokken repo'dan yeni proje oluştur. Önceden bu
+              // dal boştu: boş ekran "repository'den başla" diyordu ama
+              // repo seçmek hiçbir şey yapmıyordu.
+              void library
+                .createProject({
+                  name: repo.name,
+                  description: repo.description,
+                  status: "active",
+                  // Dil bilgisi varsa ilk teknoloji olarak alınır; yoksa
+                  // liste boş kalır, uydurulmaz.
+                  technologies: repo.language ? [repo.language] : [],
+                  githubFullName: repo.fullName,
+                })
+                .then((project) => {
+                  if (project) setParam({ project: project.id });
+                });
             }
             closeDialog();
           }}
