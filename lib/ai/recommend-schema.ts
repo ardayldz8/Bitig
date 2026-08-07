@@ -67,14 +67,27 @@ export function buildRecommendPrompt(kind: "manga" | "media"): string {
       ? "manga"
       : "dizi ve film (kind alanında 'series' ya da 'movie' kullan)";
 
+  const turKurali =
+    kind === "manga"
+      ? `kind alanına HER ZAMAN "manga" yaz. Webtoon, manhwa ve manhua da
+manga sayılır — bunlara "series" DEME, "series" televizyon dizisi demektir.`
+      : `kind alanına "series" (televizyon dizisi) ya da "movie" (film) yaz.
+Manga önerme.`;
+
   return `Kullanıcının okuduğu/izlediği eserlere bakıp benzerlerini önerirsin.
 Bu istekte YALNIZCA ${alan} önereceksin.
+
+${turKurali}
 
 MUTLAK KURALLAR:
 - Yalnızca GERÇEKTEN VAR OLAN eserleri öner. Emin değilsen önerme.
 - title alanına eserin ÖZGÜN ya da İNGİLİZCE adını yaz. Kataloglar böyle
   indeksli; Türkçe çeviri adla arama sonuç vermiyor.
-- Kullanıcının listesinde ZATEN OLAN bir eseri önerme.
+- Kullanıcının listesinde ZATEN OLAN bir eseri önerme. DİKKAT: liste Türkçe
+  çeviri adlarla tutuluyor olabilir ("4000 Yılın Ardından Dönen Kadim Büyücü"
+  = "The Archmage Returns After 4000 Years"). Önereceğin eserin Türkçe adı
+  listede geçiyorsa ONU DA ÖNERME — ad karşılaştırması yapan kod bu iki adı
+  eşleştiremiyor, eleme sana kalıyor.
 - Aynı eseri iki kez önerme.
 - Puanı yüksek kayıtlara benzeyenlere ağırlık ver; düşük puan verdiklerine
   benzeyenlerden kaçın.

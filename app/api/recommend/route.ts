@@ -165,9 +165,26 @@ export async function POST(request: Request) {
 
   // ------------------------------------------------- Katalogda doğrulama
 
-  // Zaten sahip olunanları AI'ya rağmen ele: kural ihlali sessizce geçmesin
+  /*
+   * Tür MODELE SORULMUYOR, çağıran taraftan geliyor.
+   *
+   * Model manga önerilerine `kind: "series"` diyordu — muhtemelen "webtoon
+   * serisi" anlamında. Bunlar dizi kataloğunda (TVMaze) aranıp haklı olarak
+   * eleniyordu: 12 öneriden 10'u kayboluyordu ve kullanıcıya "öneri
+   * çalışmıyor" gibi görünüyordu.
+   *
+   * Manga isteğinde tür kesin. Dizi/film isteğinde model hâlâ ikisi arasında
+   * seçim yapıyor — orada gerçekten bilgi katıyor — ama "manga" derse o öneri
+   * elenir, çünkü istenen o değil.
+   */
   const adaylar = oneri.suggestions
     .filter((item) => !sahipOlunan.has(anahtar(item.title)))
+    .map((item) =>
+      kind === "manga"
+        ? { ...item, kind: "manga" as const }
+        : item,
+    )
+    .filter((item) => (kind === "manga" ? true : item.kind !== "manga"))
     .slice(0, 10);
 
   const dogrulananlar = await Promise.all(
