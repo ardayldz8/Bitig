@@ -62,6 +62,15 @@ export async function GET(request: Request) {
     return NextResponse.json(durum);
   }
 
+  /*
+   * Birden çok model ölçülebiliyor: canlıdaki yavaşlığın modelden mi yoksa
+   * Netlify'ın ağ yolundan mı geldiğini ancak yan yana ölçerek ayırt
+   * edebiliyoruz.
+   */
+  const istenen = new URL(request.url).searchParams.get("models");
+  const modeller = istenen ? istenen.split(",").slice(0, 4) : [env.projectModel()];
+
+  const olc = async (model: string): Promise<Record<string, unknown>> => {
   const t0 = Date.now();
   let ai: Record<string, unknown>;
   try {
@@ -78,7 +87,7 @@ export async function GET(request: Request) {
        * taklit etmeli.
        */
       body: JSON.stringify({
-        model: env.projectModel(),
+        model,
         temperature: 0.2,
         max_tokens: 2500,
         messages: [
@@ -99,7 +108,7 @@ Bu metinden yiyecekleri çıkar.`,
 
     const govde = await response.text();
     if (!response.ok) {
-      ai = { status: response.status, ms: Date.now() - t0, body: govde.slice(0, 300) };
+      ai = { model, status: response.status, ms: Date.now() - t0, body: govde.slice(0, 300) };
     } else {
       // Şema doğrulaması da burada: kullanıcının gördüğü hata buradan da gelebilir
       const payload = JSON.parse(govde) as {
@@ -108,6 +117,7 @@ Bu metinden yiyecekleri çıkar.`,
       const icerik = payload.choices?.[0]?.message?.content;
       const parsed = icerik ? foodTextResultSchema.safeParse(JSON.parse(icerik)) : null;
       ai = {
+        model,
         status: 200,
         ms: Date.now() - t0,
         finish: payload.choices?.[0]?.finish_reason ?? null,
@@ -119,11 +129,17 @@ Bu metinden yiyecekleri çıkar.`,
     }
   } catch (error) {
     ai = {
+      model,
       status: null,
       ms: Date.now() - t0,
       body: error instanceof Error ? error.message.slice(0, 200) : "bilinmeyen hata",
     };
   }
+    return ai;
+  };
 
-  return NextResponse.json({ ...durum, ai });
+  const olcumler = [];
+  for (const model of modeller) olcumler.push(await olc(model));
+
+  return NextResponse.json({ ...durum, ai: olcumler });
 }
