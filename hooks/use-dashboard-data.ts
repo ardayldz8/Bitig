@@ -202,6 +202,36 @@ export function useDashboardData(): { data: DashboardData; loading: boolean } {
         const updatedAt =
           typeof current.updated_at === "string" ? current.updated_at : null;
 
+        // GitHub durumu senkronizasyonda kaydedilen tablolardan okunur.
+        // Ana sayfa GitHub'a istek ATMAZ; yalnızca son bilinen durumu gösterir.
+        const [runResult, issueResult] = await Promise.all([
+          supabase
+            .from("github_workflow_runs")
+            .select("status, conclusion")
+            .eq("project_id", current.id)
+            .order("started_at", { ascending: false })
+            .limit(1),
+          supabase
+            .from("github_issues")
+            .select("id", { count: "exact", head: true })
+            .eq("project_id", current.id)
+            .eq("state", "open"),
+        ]);
+
+        // Senkronize edilmemiş proje için hata değil, "bilinmiyor" doğru cevap
+        const lastRun = unwrap(runResult)[0] ?? null;
+        const ciStatus = lastRun
+          ? lastRun.status !== "completed"
+            ? ("pending" as const)
+            : lastRun.conclusion === "success"
+              ? ("success" as const)
+              : lastRun.conclusion === null
+                ? null
+                : ("failure" as const)
+          : null;
+
+        const openIssues = issueResult.error ? null : (issueResult.count ?? null);
+
         recent.push({
           id: `project-${current.id}`,
           module: "projects",
@@ -218,9 +248,8 @@ export function useDashboardData(): { data: DashboardData; loading: boolean } {
             name: current.name,
             status: typeof current.status === "string" ? current.status : "active",
             updatedAt,
-            // Ana sayfa GitHub çağrısı yapmaz; CI durumu ve issue sayısı bilinmez
-            ciStatus: null,
-            openIssues: null,
+            ciStatus,
+            openIssues,
           },
         };
       }, "Proje bilgisi şu anda kullanılamıyor");

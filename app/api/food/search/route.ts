@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchRequestSchema } from "@/lib/calorie/validation";
 import { configuredProviders } from "@/lib/nutrition/provider";
-import { resolveNutrition } from "@/lib/nutrition/search-nutrition";
+import { resolveNutritionDetailed } from "@/lib/nutrition/search-nutrition";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
 import type { ResolvedNutrition } from "@/types/calorie";
 
@@ -48,14 +48,18 @@ export async function POST(request: Request) {
   }
 
   const matches: SearchMatch[] = [];
+  let anyUnavailable = false;
+
   for (const item of parsed.data.items) {
     const queries = item.queries.length > 0 ? item.queries : [item.name];
-    const found = await resolveNutrition({
+    const { result: found, unavailable } = await resolveNutritionDetailed({
       queries,
       brand: item.brand,
       barcode: item.barcode,
       kind: item.kind,
     }, request.signal);
+
+    if (unavailable) anyUnavailable = true;
 
     matches.push({
       name: item.name,
@@ -76,5 +80,18 @@ export async function POST(request: Request) {
     });
   }
 
-  return NextResponse.json({ matches, providers: available });
+  // Eşleşme YOK ve kaynağa erişilemedi → bu "bulunamadı" değil, "şu anda
+  // bakılamadı". İkisini aynı göstermek özelliği bozuk sandırıyor.
+  const hicEslesmeYok = matches.every((item) => item.match === null);
+
+  return NextResponse.json({
+    matches,
+    providers: available,
+    ...(anyUnavailable && hicEslesmeYok
+      ? {
+          warning:
+            "Besin veri kaynağı şu anda yanıt vermiyor (istek sınırı). Birkaç dakika sonra tekrar dene ya da değerleri manuel gir.",
+        }
+      : {}),
+  });
 }

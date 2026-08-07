@@ -71,6 +71,17 @@ export default function AnalysisResult({
         </p>
       )}
 
+      {/* Geçici erişim sorunu, kalıcı "bulunamadı"dan ayrı gösterilir:
+          biri birkaç dakikada geçer, diğeri manuel giriş gerektirir. */}
+      {outcome.sourceUnavailable && (
+        <p
+          role="status"
+          className="mt-2 rounded-xl bg-amber-100 px-3.5 py-2.5 text-sm text-amber-800"
+        >
+          {outcome.sourceUnavailable}
+        </p>
+      )}
+
       <ul className="mt-4 space-y-3">
         {outcome.rows.map((row) => (
           <DetectedFoodRow

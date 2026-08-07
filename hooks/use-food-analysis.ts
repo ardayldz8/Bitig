@@ -32,6 +32,11 @@ export type AnalysisOutcome = {
   /** En az bir yiyecek için doğrulanmış besin verisi yok. */
   hasUnresolved: boolean;
   lowConfidence: boolean;
+  /**
+   * Besin kaynağı geçici olarak yanıt vermedi (hız sınırı).
+   * "Bulunamadı"dan ayrı tutulur: biri kalıcı, diğeri birkaç dakikalık.
+   */
+  sourceUnavailable?: string | null;
 };
 
 export type FoodAnalysis = {
@@ -83,7 +88,9 @@ export function useFoodAnalysis(): FoodAnalysis {
     async (
       items: { name: string; brand: string | null; queries: string[]; barcode: string | null; kind: FoodKind }[],
       signal: AbortSignal,
-    ): Promise<(ResolvedNutrition | null)[]> => {
+    ): Promise<{ matches: (ResolvedNutrition | null)[]; warning: string | null }> => {
+      const bos = { matches: items.map(() => null), warning: null };
+
       const response = await fetch("/api/food/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -91,20 +98,28 @@ export function useFoodAnalysis(): FoodAnalysis {
         signal,
       });
 
-      if (!response.ok) return items.map(() => null);
+      if (!response.ok) return bos;
 
       const data: unknown = await response.json();
-      if (typeof data !== "object" || data === null) return items.map(() => null);
+      if (typeof data !== "object" || data === null) return bos;
+
+      // Kaynak erişilemezliği burada taşınır; atılırsa kullanıcı "hiç
+      // bulmuyor" sanır, oysa birkaç dakika sonra çalışacak.
+      const raw = (data as { warning?: unknown }).warning;
+      const warning = typeof raw === "string" && raw.length > 0 ? raw : null;
 
       const matches = (data as { matches?: unknown }).matches;
-      if (!Array.isArray(matches)) return items.map(() => null);
+      if (!Array.isArray(matches)) return { ...bos, warning };
 
-      return items.map((_, index) => {
-        const entry = matches[index];
-        if (typeof entry !== "object" || entry === null) return null;
-        const match = (entry as { match?: unknown }).match;
-        return isResolved(match) ? match : null;
-      });
+      return {
+        warning,
+        matches: items.map((_, index) => {
+          const entry = matches[index];
+          if (typeof entry !== "object" || entry === null) return null;
+          const match = (entry as { match?: unknown }).match;
+          return isResolved(match) ? match : null;
+        }),
+      };
     },
     [],
   );
@@ -170,7 +185,7 @@ export function useFoodAnalysis(): FoodAnalysis {
           kind: inferKind(vision.imageType, item.brand),
         }));
 
-        const matches = await runSearch(requestItems, controller.signal);
+        const { matches, warning } = await runSearch(requestItems, controller.signal);
         if (controller.signal.aborted) return;
 
         safeSet(setStage, "calculating" as AnalysisStage);
@@ -183,6 +198,7 @@ export function useFoodAnalysis(): FoodAnalysis {
           noFoodFound: false,
           hasUnresolved: rows.some((row) => row.match === null),
           lowConfidence: vision.overallConfidence < 0.7 || vision.hasUnreadableText,
+          sourceUnavailable: warning,
         });
         safeSet(setStage, "done" as AnalysisStage);
       } catch (caught) {

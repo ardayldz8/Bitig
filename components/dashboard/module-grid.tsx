@@ -117,7 +117,17 @@ export default function ModuleGrid({ data }: { data: DashboardData }) {
               projectFallback || data.projects.state !== "ok"
                 ? null
                 : (() => {
-                    const label = relativeDayLabel(data.projects.data.updatedAt);
+                    const { ciStatus, openIssues, updatedAt } = data.projects.data;
+
+                    // Öncelik sırası: bozuk CI > açık issue > son güncelleme.
+                    // Dikkat isteyen bilgi, bilgilendirici olanın önüne geçer.
+                    if (ciStatus === "failure") return "CI başarısız";
+                    if (ciStatus === "pending") return "CI çalışıyor";
+                    if (openIssues !== null && openIssues > 0) {
+                      return `${openIssues} açık issue`;
+                    }
+
+                    const label = relativeDayLabel(updatedAt);
                     return label ? `Son güncelleme: ${label}` : null;
                   })()
             }

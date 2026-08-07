@@ -26,6 +26,14 @@ export function configuredProviders(): NutritionProviderName[] {
 /**
  * Yiyecek türüne göre denenecek sağlayıcı sırası.
  * Zincirdeki tüm kaynaklar boş dönerse manuel girişe düşülür.
+ *
+ * `open_food_facts` her zincirin sonunda: FatSecret ve USDA tarif/genel besin
+ * için daha iyi kaynaklar ama anahtarları tanımlı olmayabiliyor. O durumda
+ * zincir tamamen yapılandırılmamış sağlayıcılardan oluşuyor ve her arama
+ * manuel girişe düşüyordu — tabak yemeği fotoğraflamak işe yaramıyordu.
+ *
+ * Bu, "besin değeri uydurulmaz" kuralını bozmaz: Open Food Facts da izin
+ * verilen üç kaynaktan biri.
  */
 export function providerChain(input: {
   kind: FoodKind;
@@ -39,8 +47,8 @@ export function providerChain(input: {
     case "branded_packaged":
       return ["open_food_facts", "fatsecret"];
     case "turkish_or_restaurant":
-      return ["fatsecret", "usda"];
+      return ["fatsecret", "usda", "open_food_facts"];
     case "generic_basic":
-      return ["fatsecret", "usda"];
+      return ["fatsecret", "usda", "open_food_facts"];
   }
 }

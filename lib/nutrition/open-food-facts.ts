@@ -60,6 +60,20 @@ function toResult(product: Record<string, unknown>): NutritionSearchResult | nul
 /** Yalnızca ihtiyaç duyulan alanlar — yanıt boyutunu ciddi biçimde küçültür. */
 const FIELDS = "code,product_name,product_name_tr,brands,nutriments,serving_quantity,quantity";
 
+/**
+ * Kaynak geçici olarak yanıt veremiyor.
+ *
+ * "Sonuç bulunamadı" ile "servis şu anda kapalı" ayrı şeyler. İkisi aynı
+ * gösterilince kullanıcı özelliğin bozuk olduğunu sanıyor; oysa bir dakika
+ * sonra çalışacak. Open Food Facts hız sınırında 503 ya da 200 + HTML dönüyor.
+ */
+export class NutritionUnavailableError extends Error {
+  constructor(readonly provider: string) {
+    super(`${provider} şu anda yanıt vermiyor`);
+    this.name = "NutritionUnavailableError";
+  }
+}
+
 async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -70,15 +84,24 @@ async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       signal: controller.signal,
     });
+
+    // 429/503: hız sınırı ya da bakım. 404 gerçek "yok" cevabıdır.
+    if (response.status === 429 || response.status >= 500) {
+      throw new NutritionUnavailableError("open_food_facts");
+    }
     if (!response.ok) return null;
 
-    // OFF hız sınırına takılınca 200 ile HTML hata sayfası döndürebiliyor;
-    // JSON.parse patlamasın diye içerik tipini önceden kontrol et.
+    // Hız sınırında 200 ile HTML hata sayfası da dönebiliyor.
     const contentType = response.headers.get("content-type") ?? "";
-    if (!contentType.includes("json")) return null;
+    if (!contentType.includes("json")) {
+      throw new NutritionUnavailableError("open_food_facts");
+    }
 
     return await response.json();
-  } catch {
+  } catch (error) {
+    if (error instanceof NutritionUnavailableError) throw error;
+    // Ağ hatası / zaman aşımı da "şu anda erişilemiyor" sayılır
+    if (controller.signal.aborted) throw new NutritionUnavailableError("open_food_facts");
     return null;
   } finally {
     clearTimeout(timer);
