@@ -1,3 +1,4 @@
+import { NutritionUnavailableError } from "@/lib/nutrition/unavailable";
 import type {
   NutritionProvider,
   NutritionSearchQuery,
@@ -61,20 +62,6 @@ function toResult(product: Record<string, unknown>): NutritionSearchResult | nul
 
 /** Yalnızca ihtiyaç duyulan alanlar — yanıt boyutunu ciddi biçimde küçültür. */
 const FIELDS = "code,product_name,product_name_tr,brands,nutriments,serving_quantity,quantity";
-
-/**
- * Kaynak geçici olarak yanıt veremiyor.
- *
- * "Sonuç bulunamadı" ile "servis şu anda kapalı" ayrı şeyler. İkisi aynı
- * gösterilince kullanıcı özelliğin bozuk olduğunu sanıyor; oysa bir dakika
- * sonra çalışacak. Open Food Facts hız sınırında 503 ya da 200 + HTML dönüyor.
- */
-export class NutritionUnavailableError extends Error {
-  constructor(readonly provider: string) {
-    super(`${provider} şu anda yanıt vermiyor`);
-    this.name = "NutritionUnavailableError";
-  }
-}
 
 async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
   const controller = new AbortController();

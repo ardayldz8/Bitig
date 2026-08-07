@@ -1,3 +1,4 @@
+import { NutritionUnavailableError } from "@/lib/nutrition/unavailable";
 import type {
   NutritionProvider,
   NutritionSearchQuery,
@@ -10,10 +11,38 @@ const TIMEOUT_MS = 12_000;
 
 let cachedToken: { value: string; expiresAt: number } | null = null;
 
+/**
+ * Kalıcı yapılandırma hataları. Tekrar denemek bunları çözmez, o yüzden
+ * sağlayıcı kendini kapatır: aksi hâlde her arama önce FatSecret'e gidip
+ * başarısız oluyor, gecikme ekliyor ve kullanıcıya "kaynak şu anda yanıt
+ * vermiyor" dedirtiyor — oysa sorun geçici değil.
+ *
+ * 21 özellikle önemli: ücretsiz katman IP whitelist istiyor ve Netlify'ın
+ * giden IP'leri sabit olmadığı için orada her istek bu hatayı alır.
+ */
+const KALICI_HATA_KODLARI = new Set([
+  2, // eksik zorunlu parametre
+  5, // geçersiz token
+  8, // geçersiz imza yöntemi
+  12, // eksik OAuth parametresi
+  13, // geçersiz anahtar
+  14, // geçersiz imza
+  21, // IP whitelist dışında
+]);
+
+/** Kalıcı hata görülene kadar null; sonrasında sebebi tutar. */
+let kapaliSebep: string | null = null;
+
 function credentials(): { id: string; secret: string } | null {
   const id = process.env.FATSECRET_CLIENT_ID ?? "";
   const secret = process.env.FATSECRET_CLIENT_SECRET ?? "";
   return id && secret ? { id, secret } : null;
+}
+
+/** Test yalıtımı için: süreç içi devre dışı bırakmayı sıfırlar. */
+export function _resetFatSecretState(): void {
+  kapaliSebep = null;
+  cachedToken = null;
 }
 
 async function getAccessToken(signal?: AbortSignal): Promise<string | null> {
@@ -116,7 +145,7 @@ export const fatSecretProvider: NutritionProvider = {
   name: "fatsecret",
 
   isConfigured() {
-    return credentials() !== null;
+    return credentials() !== null && kapaliSebep === null;
   },
 
   async search(query: NutritionSearchQuery, signal?: AbortSignal) {
@@ -147,6 +176,29 @@ export const fatSecretProvider: NutritionProvider = {
       const data: unknown = await response.json();
       if (typeof data !== "object" || data === null) return [];
 
+      /*
+       * FatSecret hatayı 200 gövdesinde döndürüyor. Bu blok olmadan hata
+       * "sonuç yok" sanılıyordu: ücretsiz katman IP whitelist istiyor ve
+       * whitelist'te olmayan bir sunucudan yapılan her arama sessizce boş
+       * dönerdi — yanlış yapılandırma fark edilmezdi.
+       */
+      const apiError = (data as { error?: unknown }).error;
+      if (typeof apiError === "object" && apiError !== null) {
+        const { code, message } = apiError as { code?: unknown; message?: unknown };
+        const aciklama = typeof message === "string" ? message : "bilinmeyen hata";
+
+        if (typeof code === "number" && KALICI_HATA_KODLARI.has(code)) {
+          kapaliSebep = aciklama;
+          console.warn(
+            `[nutrition] FatSecret devre dışı bırakıldı (kod ${code}): ${aciklama}. ` +
+              `Diğer kaynaklar kullanılmaya devam ediyor.`,
+          );
+          return [];
+        }
+
+        throw new NutritionUnavailableError(`fatsecret: ${aciklama}`);
+      }
+
       const foodsContainer = (data as { foods?: unknown }).foods;
       if (typeof foodsContainer !== "object" || foodsContainer === null) return [];
 
@@ -158,7 +210,9 @@ export const fatSecretProvider: NutritionProvider = {
         .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
         .map(toResult)
         .filter((item): item is NutritionSearchResult => item !== null);
-    } catch {
+    } catch (error) {
+      // Yapılandırma hatası zincirde sessizce yutulmamalı
+      if (error instanceof NutritionUnavailableError) throw error;
       return [];
     } finally {
       clearTimeout(timer);

@@ -1,4 +1,4 @@
-import { NutritionUnavailableError } from "@/lib/nutrition/open-food-facts";
+import { NutritionUnavailableError } from "@/lib/nutrition/unavailable";
 import { isPlausible } from "@/lib/nutrition/plausibility";
 import { getProvider, providerChain } from "@/lib/nutrition/provider";
 import type {
@@ -132,23 +132,85 @@ function benzer(a: string, b: string): boolean {
 }
 
 /**
+ * Aranan yiyeceğin kendisini değil, bir PARÇASINI / TÜREVİNİ / ağır işlenmiş
+ * biçimini gösteren nitelemeler.
+ *
+ * Bunlar yalnızca kullanıcı İSTEMEDİĞİ hâlde adayda geçiyorsa cezalandırılır:
+ * "portakal suyu" arayan biri için "suyu" doğru, "portakal" arayan için değil.
+ *
+ * Gerçek hatalardan çıkarıldı: "egg" → "egg white" (55 kcal, oysa bütün
+ * yumurta ~143), "oats" → "Oat bran" ve "Oil, oat", "tavuk göğsü" →
+ * "breaded" tavuk, "pilav" → "rice mix, pilaf flavor" (kuru karışım).
+ */
+const TUREV_NITELEMELERI = new Set([
+  // parça ya da türev
+  "white", "whites", "yolk", "yolks", "bran", "germ", "oil", "juice",
+  "powder", "extract", "flour", "skin", "peel", "seed", "seeds", "leaf",
+  "leaves", "husk", "syrup",
+  // ürünü baştan başka bir şey yapan işlemler
+  "breaded", "battered", "candied", "sweetened", "dehydrated", "dried",
+  "dry", "concentrate", "concentrated", "mix", "flavored", "flavoured",
+  "flavor", "flavour", "instant",
+]);
+
+/**
  * Sonucun sorguyla ne kadar ilgili olduğu (0–1).
  *
- * Baş kelime ağırlıklı: USDA açıklamaları "Yiyecek, niteleyici, niteleyici"
- * biçiminde ve ayırt edici olan ilk kelime. "oats" araması "Oil, oat" (yulaf
- * YAĞI, 884 kcal) sonucunu ilk sırada döndürüyordu — değer makul olduğu için
- * makullük filtresi yakalayamıyor, yanlış olan yiyeceğin kendisi.
+ * Dört bileşen:
+ *  - kapsama: sorgu kelimelerinin kaçı adayda geçiyor
+ *  - bitişiklik: sorgudaki ardışık kelime çiftleri adayda da yan yana mı.
+ *    Kelime torbası tek başına "grilled cheese sandwich" ile "grilled chicken
+ *    sandwich, WITH CHEESE" arasını ayıramıyor — üçü de geçtiği için ikincisi
+ *    tam kapsama alıyordu. Sıra bakınca fark ortaya çıkıyor.
+ *  - baş kelime: USDA açıklamaları "Yiyecek, niteleyici, niteleyici" biçiminde
+ *    ve ayırt edici olan ilk kelime ("oats" → "Oil, oat" hatası buradan)
+ *  - sadelik: sorguda karşılığı olmayan fazladan kelime ne kadar azsa aday o
+ *    kadar yakın. Bu olmadan "Egg, whole, raw" ile "Eggs, Grade A, Large, egg
+ *    white" tam puanda berabere kalıyor ve listede önce geleni kazanıyordu.
+ *
+ * Baş kelime tek başına belirleyici değil: Open Food Facts adları serbest ürün
+ * adı ("Turkish Sessame Bagel Simit") ve aranan kelime sonda kalabiliyor.
  */
 export function relevance(query: string, name: string): number {
   const q = tokens(query);
   const n = tokens(name);
   if (q.length === 0 || n.length === 0) return 0;
 
+  const istendi = (word: string) => q.some((other) => benzer(word, other));
+
   const basEslesti = q.some((word) => benzer(n[0], word)) ? 1 : 0;
   const kapsanan = q.filter((word) => n.some((other) => benzer(other, word))).length / q.length;
 
-  return basEslesti * 0.6 + kapsanan * 0.4;
+  // Tek kelimelik sorguda çift yok; bileşeni nötr bırak, yoksa hepsi cezalanır.
+  let bitisik = 1;
+  if (q.length >= 2) {
+    let eslesen = 0;
+    for (let i = 0; i < q.length - 1; i++) {
+      const varMi = n.some(
+        (word, j) => j + 1 < n.length && benzer(word, q[i]) && benzer(n[j + 1], q[i + 1]),
+      );
+      if (varMi) eslesen++;
+    }
+    bitisik = eslesen / (q.length - 1);
+  }
+
+  const fazla = n.filter((word) => !istendi(word)).length;
+  const sadelik = 1 / (1 + fazla / 3);
+
+  const puan = kapsanan * 0.4 + bitisik * 0.25 + basEslesti * 0.2 + sadelik * 0.15;
+
+  const turev = n.some((word) => TUREV_NITELEMELERI.has(word) && !istendi(word));
+  return turev ? puan * 0.45 : puan;
 }
+
+/**
+ * Bu eşiğin altındaki en iyi aday bile kabul edilmez.
+ *
+ * "Yanlış yiyecek" en az "besin değeri uydurmak" kadar zararlı: kaşarlı tost
+ * araması "grilled chicken, bacon and tomato sandwich" döndürüyordu. Eşiğin
+ * altında kalınca kullanıcı manuel girişe düşer — bu tasarlanmış davranış.
+ */
+const ILGI_ESIGI = 0.5;
 
 /**
  * Kalorisi sıfır olmayan, fiziksel olarak mümkün ve sorguya en ilgili sonucu
@@ -168,7 +230,9 @@ function pickBest(
   if (uygun.length === 0) return null;
 
   // Eşit puanda kaynağın kendi sıralaması korunur (reduce ilkini tutar).
-  return uygun.reduce((best, item) =>
-    relevance(query, item.name) > relevance(query, best.name) ? item : best,
+  const best = uygun.reduce((onceki, item) =>
+    relevance(query, item.name) > relevance(query, onceki.name) ? item : onceki,
   );
+
+  return relevance(query, best.name) >= ILGI_ESIGI ? best : null;
 }
