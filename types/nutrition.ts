@@ -10,6 +10,13 @@ export type NutritionProviderName = (typeof ALLOWED_NUTRITION_PROVIDERS)[number]
 /** Bir değerin nereden geldiği. AI asla kaynak değildir. */
 export type NutritionSource =
   | NutritionProviderName
+  /*
+   * Kullanıcının kendi tarifi. "manual" DEĞİL: değerler elle girilmiş
+   * tahminler değil, gerçek kaynaklardan gelen malzemelerden hesaplanmış.
+   * Ayrı tutulması, bir kaydın nereden geldiğinin izlenebilir kalmasını
+   * sağlıyor.
+   */
+  | "recipe"
   | "nutrition_label"
   | "manual";
 
@@ -17,6 +24,7 @@ export const SOURCE_LABELS: Record<NutritionSource, string> = {
   fatsecret: "FatSecret",
   open_food_facts: "Open Food Facts",
   usda: "USDA FoodData Central",
+  recipe: "Kendi tarifim",
   nutrition_label: "Besin etiketi",
   manual: "Manuel",
 };

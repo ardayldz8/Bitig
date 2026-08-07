@@ -6,6 +6,7 @@ import AnalysisResult from "@/components/calorie/analysis-result";
 import DailySummary from "@/components/calorie/daily-summary";
 import FoodEntryModal, { type EntryPrefill } from "@/components/calorie/food-entry-modal";
 import DescribeFood from "@/components/calorie/describe-food";
+import RecipePanel from "@/components/calorie/recipe-panel";
 import FoodScanner from "@/components/calorie/food-scanner";
 import MacroProgress from "@/components/calorie/macro-progress";
 import MealSection from "@/components/calorie/meal-section";
@@ -284,6 +285,16 @@ export default function CaloriePage() {
                 onSave={handleSaveAnalysis}
                 onCancel={analysis.reset}
               />
+            </div>
+          )}
+
+          {/*
+            Tarifler analiz akışının dışında: fotoğraf/metin bir kereliktir,
+            tarif ise kayıtlı ve tekrar kullanılan bir tanım.
+          */}
+          {analysis.stage !== "done" && (
+            <div className="mt-4">
+              <RecipePanel onAdd={(entry) => tracker.addEntries([entry])} />
             </div>
           )}
 
