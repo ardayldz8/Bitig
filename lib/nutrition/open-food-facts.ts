@@ -5,6 +5,8 @@ import type {
 } from "@/types/nutrition";
 
 const BASE = "https://world.openfoodfacts.org";
+/** Türkiye'de satılan ürünler; adlar da Türkçe geliyor. */
+const TR_BASE = "https://tr.openfoodfacts.org";
 const USER_AGENT = "Bitig/0.1 (kalori takibi)";
 const TIMEOUT_MS = 12_000;
 
@@ -119,19 +121,34 @@ export const openFoodFactsProvider: NutritionProvider = {
 
   async search(query: NutritionSearchQuery, signal?: AbortSignal) {
     const terms = [query.brand, query.query].filter(Boolean).join(" ");
-    const url =
-      `${BASE}/cgi/search.pl?search_terms=${encodeURIComponent(terms)}` +
-      `&search_simple=1&action=process&json=1&page_size=5&fields=${FIELDS}`;
 
-    const data = await fetchJson(url, signal);
-    if (typeof data !== "object" || data === null) return [];
-    const products = (data as { products?: unknown }).products;
-    if (!Array.isArray(products)) return [];
+    const ara = async (base: string): Promise<NutritionSearchResult[]> => {
+      const url =
+        `${base}/cgi/search.pl?search_terms=${encodeURIComponent(terms)}` +
+        `&search_simple=1&action=process&json=1&page_size=5&lc=tr&fields=${FIELDS}`;
 
-    return products
-      .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-      .map(toResult)
-      .filter((item): item is NutritionSearchResult => item !== null);
+      const data = await fetchJson(url, signal);
+      if (typeof data !== "object" || data === null) return [];
+      const products = (data as { products?: unknown }).products;
+      if (!Array.isArray(products)) return [];
+
+      return products
+        .filter(
+          (item): item is Record<string, unknown> =>
+            typeof item === "object" && item !== null,
+        )
+        .map(toResult)
+        .filter((item): item is NutritionSearchResult => item !== null);
+    };
+
+    // Önce Türkiye dizini: kullanıcı Türkiye'de yaşıyor, aradığı ürünler
+    // burada satılanlar. Dünya dizini ABD/AB ağırlıklı sonuç döndürüyor ve
+    // "mercimek çorbası" gibi aramalarda alakasız eşleşme veriyor.
+    const yerel = await ara(TR_BASE);
+    if (yerel.length > 0) return yerel;
+
+    // Türkiye dizininde yoksa dünya dizinine düş — evrensel besinler orada.
+    return ara(BASE);
   },
 
   async getByBarcode(barcode: string, signal?: AbortSignal) {

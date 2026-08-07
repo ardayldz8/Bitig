@@ -87,8 +87,12 @@ Kurallar:
   ayır (ekmek, peynir, tereyağı) — böylece her biri ayrı aranabilir.
 - Miktar belirtilmemişse estimatedQuantity null bırak ve unclear'a ekle.
   Miktar UYDURMA.
-- searchQueries'e besin veritabanında işe yarayacak terimler koy. Türkçe adın
-  yanına İngilizce karşılığını da ekle; veritabanları çoğunlukla İngilizce.
+- searchQueries SIRASI önemlidir; ilk eşleşen kazanır.
+  * Türk mutfağına ait bir yemekse (mercimek çorbası, menemen, pide, kısır…)
+    Türkçe adı BAŞA koy. Türkiye kataloğunda aranacak.
+  * Evrensel bir besinse (pirinç, tavuk, yumurta, yulaf) İngilizce karşılığı
+    başa koy; uluslararası veritabanları bunları daha iyi biliyor.
+  * Her iki dili de listeye ekle, yalnızca sırayı buna göre kur.
 - Marka adı geçiyorsa brand alanına yaz.
 - Metinde yiyecek yoksa noFoodFound true olsun ve items boş kalsın.
 - confidence, o maddeyi metinden ne kadar net çıkarabildiğini gösterir.

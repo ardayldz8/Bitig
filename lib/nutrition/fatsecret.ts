@@ -130,8 +130,12 @@ export const fatSecretProvider: NutritionProvider = {
 
     try {
       const expression = [query.brand, query.query].filter(Boolean).join(" ");
+      // region+language olmadan ABD veritabanı dönüyor. Türk mutfağı için
+      // FatSecret'in asıl değeri Türkiye kataloğunda (fatsecret.com.tr);
+      // bu iki parametre olmadan USDA'dan farkı kalmıyor.
       const url =
         `${API_URL}?method=foods.search&format=json&max_results=5` +
+        `&region=TR&language=tr` +
         `&search_expression=${encodeURIComponent(expression)}`;
 
       const response = await fetch(url, {

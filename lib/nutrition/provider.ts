@@ -46,8 +46,15 @@ export function providerChain(input: {
   switch (input.kind) {
     case "branded_packaged":
       return ["open_food_facts", "fatsecret"];
+
+    // Türk mutfağı: USDA Amerikan gıda kompozisyonuna dayanıyor, mercimek
+    // çorbası ya da menemen gibi yemekler orada yok. Türkçe kaynaklar önce
+    // denenir, USDA yalnızca son çare.
     case "turkish_or_restaurant":
-      return ["fatsecret", "usda", "open_food_facts"];
+      return ["fatsecret", "open_food_facts", "usda"];
+
+    // Evrensel besinler (pirinç, tavuk, yumurta): USDA burada gerçekten iyi,
+    // küratörlü ve tutarlı.
     case "generic_basic":
       return ["fatsecret", "usda", "open_food_facts"];
   }
