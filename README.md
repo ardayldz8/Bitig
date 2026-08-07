@@ -86,6 +86,14 @@ Bu projede birkaç kural bilinçli olarak katı tutuldu:
 - **Yerel veri sessizce yok sayılmaz.** Buluta geçişten önce tarayıcıda
   kaydedilmiş manga/kalori/dizi kayıtları için bir kez aktarım teklif edilir.
   Bulutta zaten kayıt varsa o modül atlanır ve yereldeki veri silinmez.
+- **Yedek geri yüklenebilir olmalı.** Ana sayfadan tüm veriler tek JSON olarak
+  indirilir ve aynı dosyadan geri yüklenir. Geri yükleme yazmadan önce ne
+  yazacağını gösterir; `user_id` dosyadan değil açık oturumdan alınır ve
+  kimlikler korunduğu için proje–özellik–not bağları kopmaz.
+- **Besin değeri uydurulmadığı gibi, imkânsızı da gösterilmez.** Kaynaklar
+  topluluk verisi içeriyor; 1900 kcal/100 g gibi fiziksel olarak mümkün olmayan
+  kayıtlar elenir ve kullanıcı manuel girişe yönlendirilir. "Kaynak yanıt
+  vermiyor" ile "sonuç bulunamadı" ayrı gösterilir.
 - **GitHub kurulumunun sahibi var.** `installation_id` gizli değildir; bu yüzden
   repo okuma, senkronizasyon ve issue uçları kurulumun isteği yapan kullanıcıya
   ait olduğunu RLS üzerinden doğrular. Doğrulanmamış istek 401/403 alır.
