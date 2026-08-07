@@ -99,7 +99,18 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
   const [pendingBackupCodes, setPendingBackupCodes] = useState<string[] | null>(null);
+  /*
+   * İki kopya bilerek: ref imperatif çağrılar için (callback'ler yeniden
+   * oluşturulmasın), state ise render için.
+   *
+   * Yalnızca ref varken context değeri `clientRef.current`'ı okuyordu ama ref
+   * bağımlılık olamadığı için memo yeniden hesaplanmıyordu. Client atandığı
+   * anda hiçbir state değişmediğinden, getSession() çözülene kadar tüketiciler
+   * `client: null` görüyordu. Şu anda çalışıyor olması, sonradan gelen
+   * setSession'ın memo'yu tesadüfen tazelemesine bağlıydı.
+   */
   const clientRef = useRef<SupabaseClient | null>(null);
+  const [client, setClient] = useState<SupabaseClient | null>(null);
   const mountedRef = useRef(true);
 
   useEffect(() => {
@@ -164,6 +175,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
 
     const client = getBrowserClient();
     clientRef.current = client;
+    setClient(client);
     if (!client) {
       setStatus("unconfigured");
       return;
@@ -311,7 +323,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   const value = useMemo<AuthValue>(
     () => ({
       status,
-      client: clientRef.current,
+      client,
       session,
       userId: session?.user?.id ?? null,
       userEmail: session?.user?.email ?? null,
@@ -325,6 +337,7 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     }),
     [
       status,
+      client,
       session,
       signInWithPassword,
       signOut,
