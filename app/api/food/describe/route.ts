@@ -62,15 +62,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ result });
   } catch (error) {
     if (error instanceof ProjectAiError) {
-      const status = error.status === 503 ? 503 : 502;
+      if (error.status === 503) {
+        return NextResponse.json(
+          { error: "AI yapılandırılmamış. Yiyecekleri elle ekleyebilirsin." },
+          { status: 503 },
+        );
+      }
+      // Zaman aşımı "çözümlenemedi" değil: metin sorunsuz olabilir, model geç kaldı
+      if (error.status === 504) {
+        return NextResponse.json(
+          { error: "AI zamanında yanıt vermedi. Tekrar dene ya da elle ekle." },
+          { status: 504 },
+        );
+      }
       return NextResponse.json(
-        {
-          error:
-            status === 503
-              ? "AI yapılandırılmamış. Yiyecekleri elle ekleyebilirsin."
-              : "Metin çözümlenemedi. Tekrar dener misin?",
-        },
-        { status },
+        { error: "Metin çözümlenemedi. Tekrar dener misin?" },
+        { status: 502 },
       );
     }
     return NextResponse.json({ error: "Beklenmeyen bir hata oluştu." }, { status: 500 });

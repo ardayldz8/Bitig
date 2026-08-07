@@ -3,7 +3,18 @@ import { env, openRouterStatus } from "@/lib/env";
 import { AI_SECURITY_PREAMBLE } from "@/lib/ai/security";
 
 const ENDPOINT = "https://openrouter.ai/api/v1/chat/completions";
-const TIMEOUT_MS = 60_000;
+/*
+ * Netlify'ın senkron fonksiyon sınırı 10 saniye. 60 sn'lik zaman aşımı bu
+ * sınırın çok üstündeydi ve hiçbir zaman devreye giremiyordu: yavaş bir model
+ * seçildiğinde fonksiyon Netlify tarafından öldürülüyor, kullanıcı sebebi
+ * anlaşılmayan bir hata görüyordu.
+ *
+ * Ölçüm: gemini-3.5-flash canlıda yapılandırılmış çıktı için 12,1 sn
+ * sürüyordu; gemini-2.5-flash-lite aynı işi 1,6 sn'de yapıyor.
+ *
+ * 8,5 sn: sınırın altında kalıp kendi hatamızı döndürebilmemiz için.
+ */
+const TIMEOUT_MS = 8_500;
 
 export class ProjectAiError extends Error {
   constructor(
@@ -43,7 +54,9 @@ export async function generateStructured<T>(input: {
   input.signal?.addEventListener("abort", onAbort);
 
   try {
-    const response = await fetch(ENDPOINT, {
+    let response: Response;
+    try {
+      response = await fetch(ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${env.openRouterKey()}`,
@@ -61,7 +74,18 @@ export async function generateStructured<T>(input: {
         response_format: { type: "json_schema", json_schema: input.jsonSchema },
       }),
       signal: controller.signal,
-    });
+      });
+    } catch (error) {
+      /*
+       * Zaman aşımı ayrı işaretleniyor. Önce AbortError olduğu gibi yukarı
+       * gidiyordu ve kullanıcıya "Beklenmeyen bir hata oluştu" olarak
+       * görünüyordu — oysa sebebi belli: model sınırın içinde yanıt vermedi.
+       */
+      if (controller.signal.aborted) {
+        throw new ProjectAiError("ai_timeout", 504);
+      }
+      throw error;
+    }
 
     if (!response.ok) {
       throw new ProjectAiError(`openrouter_${response.status}`, 502);
