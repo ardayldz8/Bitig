@@ -4,6 +4,8 @@ import { AlertTriangle } from "lucide-react";
 import AuthScreen from "@/components/auth/auth-screen";
 import { useAuth } from "@/components/auth/auth-provider";
 import LocalImportBanner from "@/components/auth/local-import-banner";
+import MfaChallenge from "@/components/auth/mfa-challenge";
+import MfaSetup from "@/components/auth/mfa-setup";
 import SiteNav from "@/components/ui/site-nav";
 
 /**
@@ -54,6 +56,16 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
 
   if (status === "signed_out") {
     return <AuthScreen />;
+  }
+
+  // Şifre doğru ama ikinci adım tamamlanmadı. İkisi de duvarın arkasında:
+  // veriye erişim RLS tarafından da aal2'ye bağlanmış durumda.
+  if (status === "needs_mfa_setup") {
+    return <MfaSetup />;
+  }
+
+  if (status === "needs_mfa_code") {
+    return <MfaChallenge />;
   }
 
   return (

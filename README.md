@@ -35,10 +35,12 @@ npm run dev
 uygulama verileri hesaba bağlı tuttuğu için onlarsız açılmaz ve kurulum uyarısı
 gösterir. Diğer entegrasyonlar opsiyoneldir; eksik olan sessizce devre dışı kalır.
 
-Google ile giriş için Supabase panelinde Authentication → Providers → Google
-açılmalı ve Authentication → URL Configuration altındaki Redirect URLs listesine
-uygulamanın adresi eklenmelidir. Sağlayıcı kapalıyken e-posta/şifre ile giriş
-çalışmaya devam eder.
+Giriş e-posta + şifre ile yapılır; ardından authenticator uygulamasındaki
+6 haneli TOTP kodu istenir. İlk girişte kurulum ekranı çıkar ve atlanamaz.
+
+**Authenticator'ı kaybedersen:** Supabase Dashboard → Authentication → Users →
+ilgili kullanıcı → MFA faktörünü sil. Sonraki girişte kurulum ekranı yeniden
+çıkar. Yedek kod mekanizması yok.
 
 | Komut | Ne yapar |
 |---|---|
@@ -76,6 +78,11 @@ Bu projede birkaç kural bilinçli olarak katı tutuldu:
   hiç çizilmez; navbar da öyle. Depoda saklanan oturum jetonu `getUser()` ile
   sunucuda doğrulanır — silinmiş hesabın jetonu süresi dolana kadar duvarı
   geçmesin diye.
+- **İkinci adım arayüzde değil veritabanında zorunlu.** Yalnızca ekranda kod
+  istemek yetmez: şifreyi bilen biri `aal1` jetonuyla PostgREST'e doğrudan
+  gidebilir. Tüm tablolarda `restrictive` bir politika, doğrulanmış TOTP
+  faktörü olan kullanıcıdan oturumun `aal2` olmasını şart koşar
+  (`supabase/migrations/0004_require_mfa.sql`).
 - **Yerel veri sessizce yok sayılmaz.** Buluta geçişten önce tarayıcıda
   kaydedilmiş manga/kalori/dizi kayıtları için bir kez aktarım teklif edilir.
   Bulutta zaten kayıt varsa o modül atlanır ve yereldeki veri silinmez.
