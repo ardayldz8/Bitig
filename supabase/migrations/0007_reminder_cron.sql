@@ -22,6 +22,22 @@
 create extension if not exists pg_cron with schema pg_catalog;
 create extension if not exists pg_net with schema extensions;
 
+/*
+ * Yer tutucular doldurulmadan çalıştırmayı engelle.
+ *
+ * Bu koruma olmadan dosya sorunsuz "başarılı" oluyor, cron kuruluyor ve
+ * dakikada bir sessizce hata veriyordu: sorun ancak cron.job_run_details
+ * tablosuna bakınca ("invalid URL <SITE_URL>...") görülüyordu. Bir kurulum
+ * adımının yanlış yapıldığını kurulum anında söylemesi gerekir.
+ */
+do $$
+begin
+  if '<SITE_URL>' like '<%' or '<SECRET>' like '<%' then
+    raise exception
+      'Yer tutucular doldurulmamış. <SITE_URL> ve <SECRET> değerlerini gerçek değerlerle değiştirip tekrar çalıştır.';
+  end if;
+end $$;
+
 -- Sırları Vault'a koy (bir kez; tekrar çalıştırmak günceller)
 select vault.create_secret('<SITE_URL>', 'bitig_site_url', 'Bitig canlı adresi');
 select vault.create_secret('<SECRET>', 'bitig_dispatch_secret', 'Hatırlatma gönderim sırrı');
