@@ -7,8 +7,20 @@ export const OPENROUTER_CONFIG = {
   apiKey: process.env.OPENROUTER_API_KEY ?? "",
   // Model adlarında `||`: tanımlı ama boş bir değişken `??` ile geçip varsayılanı
   // devre dışı bırakıyor ve isteğe boş model adı gidiyordu.
+  /*
+   * Birincil model bilerek değişmedi: yemek FOTOĞRAFI tanıma kalitesi burada
+   * belirleyici ve alternatifler yalnızca metin görevinde ölçüldü. Zaten
+   * çağrı başına ~$0,0004 — asıl maliyet bu değil.
+   */
   primaryModel: process.env.OPENROUTER_PRIMARY_MODEL || "google/gemini-3.1-flash-lite",
-  fallbackModel: process.env.OPENROUTER_FALLBACK_MODEL || "google/gemini-3.5-flash",
+
+  /*
+   * Yedek model gemini-3.5-flash idi ($1,50/$9,00). Birincil başarısız
+   * olduğunda devreye giren yol, birincilden 6 kat pahalı bir modele
+   * düşüyordu. Aynı ailenin ucuz üyesi metin görevinde birebir doğru sonuç
+   * verdi; yedek yolun daha pahalı olması için sebep yok.
+   */
+  fallbackModel: process.env.OPENROUTER_FALLBACK_MODEL || "google/gemini-2.5-flash-lite",
   temperature: 0.1,
   maxTokens: 1200,
   endpoint: "https://openrouter.ai/api/v1/chat/completions",

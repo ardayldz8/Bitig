@@ -78,7 +78,17 @@ export const env = {
   githubPrivateKey: () => read("GITHUB_PRIVATE_KEY").replace(/\\n/g, "\n"),
 
   openRouterKey: () => read("OPENROUTER_API_KEY"),
-  projectModel: () => read("OPENROUTER_PROJECT_MODEL") || "google/gemini-3.5-flash",
+  /*
+   * Proje AI'ı en pahalı çağrı: bütün proje verisi gönderiliyor ve yol
+   * haritası / sürüm notu gibi uzun çıktılar isteniyor.
+   *
+   * gemini-3.5-flash ($1,50/$9,00) idi. Aynı yol haritası görevinde ölçüm:
+   *   gemini-3.5-flash      776+2189 token  $0,0209  3 aşama / 7 madde
+   *   gemini-2.5-flash-lite 524+ 808 token  $0,0004  4 aşama / 8 madde
+   * Yani 55 kat pahalı olan, daha AZ sonuç üretiyordu. İkisi de veriye
+   * sadıktı, uydurma özellik çıkmadı.
+   */
+  projectModel: () => read("OPENROUTER_PROJECT_MODEL") || "google/gemini-2.5-flash-lite",
 
   vapidPublicKey: () => read("NEXT_PUBLIC_VAPID_PUBLIC_KEY"),
   vapidPrivateKey: () => read("VAPID_PRIVATE_KEY"),
