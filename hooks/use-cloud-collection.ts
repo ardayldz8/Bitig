@@ -59,8 +59,18 @@ export function useCloudCollection<T>({
   const [error, setError] = useState<string | null>(null);
 
   const mountedRef = useRef(true);
+  /*
+   * Dönüştürücünün en güncel hâli. Ref'e render sırasında değil effect'te
+   * yazılıyor: render sırasında ref güncellemek React'in eşzamanlı
+   * modunda güvenli değil ve `react-hooks/refs` bunu haklı olarak uyarıyor.
+   *
+   * Effect'e taşımak burada sorun çıkarmıyor çünkü ref YALNIZCA reload()
+   * içinde, yani mount sonrası asenkron bir noktada okunuyor.
+   */
   const toItemRef = useRef(toItem);
-  toItemRef.current = toItem;
+  useEffect(() => {
+    toItemRef.current = toItem;
+  }, [toItem]);
 
   /**
    * Listenin senkron kopyası. React state'i bir sonraki render'a kadar
