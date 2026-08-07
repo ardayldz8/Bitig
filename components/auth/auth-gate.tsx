@@ -3,6 +3,7 @@
 import { AlertTriangle } from "lucide-react";
 import AuthScreen from "@/components/auth/auth-screen";
 import { useAuth } from "@/components/auth/auth-provider";
+import BackupCodesPanel from "@/components/auth/backup-codes-panel";
 import LocalImportBanner from "@/components/auth/local-import-banner";
 import MfaChallenge from "@/components/auth/mfa-challenge";
 import MfaSetup from "@/components/auth/mfa-setup";
@@ -14,7 +15,22 @@ import SiteNav from "@/components/ui/site-nav";
  * yer göstermenin anlamı yok.
  */
 export default function AuthGate({ children }: { children: React.ReactNode }) {
-  const { status } = useAuth();
+  const { status, pendingBackupCodes, clearPendingBackupCodes } = useAuth();
+
+  /**
+   * Kurtarma kodları durum kontrolünden ÖNCE gösterilir.
+   *
+   * Kurulum doğrulandığı anda oturum aal2'ye çıkıyor ve normalde uygulama
+   * açılırdı; kodlar sunucuda yalnızca hash'li tutulduğu için o an kaçırılırsa
+   * bir daha görüntülenemezler.
+   */
+  if (pendingBackupCodes) {
+    return (
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-4 py-10">
+        <BackupCodesPanel codes={pendingBackupCodes} onDone={clearPendingBackupCodes} />
+      </main>
+    );
+  }
 
   if (status === "loading") {
     return (

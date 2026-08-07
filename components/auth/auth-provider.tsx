@@ -54,6 +54,16 @@ export type AuthValue = {
   signInWithPassword: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 
+  /**
+   * Kurulumdan hemen sonra bir kez gösterilecek kurtarma kodları.
+   *
+   * Provider'da tutuluyor çünkü doğrulama oturumu aal2'ye çıkarıyor ve
+   * AuthGate kurulum ekranını anında kaldırıyor; kodlar kurulum bileşeninde
+   * tutulsaydı ekranla birlikte yok olurdu.
+   */
+  pendingBackupCodes: string[] | null;
+  clearPendingBackupCodes: () => void;
+
   /** Yeni TOTP faktörü oluşturur; henüz doğrulanmamıştır. */
   startTotpEnrollment: () => Promise<{ enrollment: TotpEnrollment | null; error: string | null }>;
   /** Kurulum sırasında girilen ilk kodu doğrular. */
@@ -88,6 +98,7 @@ function friendly(message: string): string {
 export default function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>("loading");
   const [session, setSession] = useState<Session | null>(null);
+  const [pendingBackupCodes, setPendingBackupCodes] = useState<string[] | null>(null);
   const clientRef = useRef<SupabaseClient | null>(null);
   const mountedRef = useRef(true);
 
@@ -182,8 +193,11 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
   // davetiye çıkarırdı.
 
   const signOut = useCallback(async () => {
+    setPendingBackupCodes(null);
     await clientRef.current?.auth.signOut();
   }, []);
+
+  const clearPendingBackupCodes = useCallback(() => setPendingBackupCodes(null), []);
 
   const startTotpEnrollment = useCallback(async () => {
     const client = clientRef.current;
@@ -238,8 +252,32 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       const { error } = await client.auth.mfa.challengeAndVerify({ factorId, code });
       if (error) return friendly(error.message);
 
-      // Doğrulama oturumu aal2'ye çıkarır; durum yeniden okunur.
+      // Oturum artık aal2; kurtarma kodları ANCAK bu seviyede üretilebiliyor.
+      // Durum güncellenmeden ÖNCE üretilir: refresh çağrılınca AuthGate
+      // kurulum ekranını kaldırıyor.
       const { data } = await client.auth.getSession();
+      const token = data.session?.access_token;
+
+      try {
+        const response = await fetch("/api/auth/backup-codes", {
+          method: "POST",
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        });
+        const payload: unknown = await response.json().catch(() => null);
+        const list =
+          typeof payload === "object" && payload !== null
+            ? (payload as { codes?: unknown }).codes
+            : null;
+
+        if (Array.isArray(list) && list.length > 0) {
+          setPendingBackupCodes(
+            list.filter((item): item is string => typeof item === "string"),
+          );
+        }
+      } catch {
+        // Üretilemediyse kurulum yine tamamlandı; kullanıcı sonra üretebilir
+      }
+
       await refresh(client, data.session);
       return null;
     },
@@ -282,6 +320,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       startTotpEnrollment,
       confirmTotpEnrollment,
       verifyTotpCode,
+      pendingBackupCodes,
+      clearPendingBackupCodes,
     }),
     [
       status,
@@ -291,6 +331,8 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       startTotpEnrollment,
       confirmTotpEnrollment,
       verifyTotpCode,
+      pendingBackupCodes,
+      clearPendingBackupCodes,
     ],
   );
 

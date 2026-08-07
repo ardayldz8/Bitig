@@ -56,13 +56,13 @@ export default function MfaSetup() {
     setBusy(true);
     setError(null);
     const message = await auth.confirmTotpEnrollment(enrollment.factorId, code);
-    setBusy(false);
 
+    setBusy(false);
     if (message) {
       setError(message);
       setCode("");
     }
-    // Başarılıysa durum aal2'ye geçer ve AuthGate bu ekranı kaldırır.
+    // Başarılıysa provider kurtarma kodlarını üretir; AuthGate onları gösterir.
   }
 
   async function copySecret() {

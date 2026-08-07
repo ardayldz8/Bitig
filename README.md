@@ -38,9 +38,13 @@ gösterir. Diğer entegrasyonlar opsiyoneldir; eksik olan sessizce devre dışı
 Giriş e-posta + şifre ile yapılır; ardından authenticator uygulamasındaki
 6 haneli TOTP kodu istenir. İlk girişte kurulum ekranı çıkar ve atlanamaz.
 
-**Authenticator'ı kaybedersen:** Supabase Dashboard → Authentication → Users →
-ilgili kullanıcı → MFA faktörünü sil. Sonraki girişte kurulum ekranı yeniden
-çıkar. Yedek kod mekanizması yok.
+**Authenticator'ı kaybedersen:** Kurulum sırasında verilen 10 kurtarma
+kodundan birini kullan — giriş ekranında "Authenticator'ıma erişemiyorum".
+Kod, authenticator kaydını kaldırır ve yeni cihaz bağlamanı ister. Her kod bir
+kez çalışır; kodlar sunucuda yalnızca hash'li tutulur.
+
+Kodlar da kayıpsa: Supabase Dashboard → Authentication → Users → ilgili
+kullanıcı → MFA faktörünü sil.
 
 | Komut | Ne yapar |
 |---|---|
@@ -78,6 +82,11 @@ Bu projede birkaç kural bilinçli olarak katı tutuldu:
   hiç çizilmez; navbar da öyle. Depoda saklanan oturum jetonu `getUser()` ile
   sunucuda doğrulanır — silinmiş hesabın jetonu süresi dolana kadar duvarı
   geçmesin diye.
+- **Kurtarma kodu oturum açmaz, faktörü sıfırlar.** Supabase'in `aal2` jetonunu
+  yalnızca GoTrue üretebiliyor; kod doğrulanınca TOTP kaydı kaldırılır ve yeni
+  cihaz istenir. İki faktör korunur: buraya gelmek için şifreyle giriş yapılmış
+  (`aal1`) ve geçerli bir kod bilinmiş olmalı. Kod üretmek `aal2` ister — aksi
+  hâlde yalnızca şifreyi bilen biri kod üretip TOTP'yi atlayabilirdi.
 - **İkinci adım arayüzde değil veritabanında zorunlu.** Yalnızca ekranda kod
   istemek yetmez: şifreyi bilen biri `aal1` jetonuyla PostgREST'e doğrudan
   gidebilir. Tüm tablolarda `restrictive` bir politika, doğrulanmış TOTP
