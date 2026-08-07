@@ -1,4 +1,6 @@
+import { NutritionUnavailableError } from "@/lib/nutrition/unavailable";
 import type {
+  FoodKind,
   NutritionProvider,
   NutritionSearchQuery,
   NutritionSearchResult,
@@ -54,6 +56,31 @@ function toResult(food: Record<string, unknown>): NutritionSearchResult | null {
   };
 }
 
+/**
+ * Hangi USDA veri setlerinde aranacağı.
+ *
+ * Foundation ve SR Legacy ham maddeye odaklı; PİŞMİŞ ve KARIŞIK yemekler
+ * yalnızca Survey (FNDDS) setinde var. Bu set dışarıda bırakıldığı için
+ * "pilav" araması kuru pilav karışımı (359 kcal), "mercimek çorbası" araması
+ * hazır çorba döndürüyordu. FNDDS ile: "Rice pilaf" 137 kcal, "Soup, lentil"
+ * 60 kcal, "Eggplant and meat casserole" (musakka/karnıyarık) 96 kcal.
+ */
+function veriSetleri(kind: FoodKind | undefined): string {
+  // Tabak yemeği aranıyorsa hazır yemek seti başa gelmeli.
+  if (kind === "turkish_or_restaurant") return "Survey (FNDDS),SR Legacy";
+
+  /*
+   * Ham maddede de FNDDS gerekiyor: "oats" araması Foundation/SR Legacy'de
+   * yalnızca kepek ve yağ döndürürken FNDDS "Oats, raw" (379 kcal) veriyor.
+   *
+   * FNDDS'in pişmiş yemek kayıtlarının ("Egg, Benedict") ham madde aramasını
+   * çalma riski, ilgililik puanındaki bütün-gıda ödülüyle karşılanıyor:
+   * "Eggs, Grade A, Large, egg whole" 0,965 alırken "Egg, Benedict" 0,963'te
+   * kalıyor.
+   */
+  return "Foundation,SR Legacy,Survey (FNDDS)";
+}
+
 /** USDA FoodData Central — temel/markasız gıdalar için fallback. */
 export const usdaProvider: NutritionProvider = {
   name: "usda",
@@ -75,13 +102,25 @@ export const usdaProvider: NutritionProvider = {
       const url =
         `${ENDPOINT}?api_key=${encodeURIComponent(apiKey)}` +
         `&query=${encodeURIComponent(query.query)}` +
-        `&pageSize=5&dataType=${encodeURIComponent("Foundation,SR Legacy")}`;
+        // 5 aday sıralayıcıyı aç bırakıyordu: "oats" için doğru kayıt ilk
+        // beşte değil. Tek istek, daha geniş liste.
+        `&pageSize=15&dataType=${encodeURIComponent(veriSetleri(query.kind))}`;
 
       const response = await fetch(url, {
         headers: { Accept: "application/json" },
         signal: controller.signal,
       });
-      if (!response.ok) return [];
+
+      /*
+       * Sessizce [] dönmek, hız sınırını "sonuç yok" gibi gösteriyordu: zincir
+       * bir sonraki kaynağa düşüyor ve "yumurta" araması paketli ürün
+       * veritabanından "Egg Noodle" (339 kcal) döndürüyordu. api.data.gov hız
+       * sınırında 429 ya da 400 + HTML veriyor; ikisi de geçici.
+       */
+      if (!response.ok) {
+        if (response.status === 404) return [];
+        throw new NutritionUnavailableError("usda");
+      }
 
       const data: unknown = await response.json();
       if (typeof data !== "object" || data === null) return [];
@@ -92,7 +131,10 @@ export const usdaProvider: NutritionProvider = {
         .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
         .map(toResult)
         .filter((item): item is NutritionSearchResult => item !== null);
-    } catch {
+    } catch (error) {
+      if (error instanceof NutritionUnavailableError) throw error;
+      // Ağ hatası / zaman aşımı da "şu anda erişilemiyor" sayılır
+      if (controller.signal.aborted) throw new NutritionUnavailableError("usda");
       return [];
     } finally {
       clearTimeout(timer);

@@ -112,7 +112,7 @@ export const openFoodFactsProvider: NutritionProvider = {
     const ara = async (base: string): Promise<NutritionSearchResult[]> => {
       const url =
         `${base}/cgi/search.pl?search_terms=${encodeURIComponent(terms)}` +
-        `&search_simple=1&action=process&json=1&page_size=5&lc=tr&fields=${FIELDS}`;
+        `&search_simple=1&action=process&json=1&page_size=15&lc=tr&fields=${FIELDS}`;
 
       const data = await fetchJson(url, signal);
       if (typeof data !== "object" || data === null) return [];

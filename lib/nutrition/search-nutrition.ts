@@ -41,55 +41,64 @@ export async function resolveNutritionDetailed(
   signal?: AbortSignal,
 ): Promise<{ result: NutritionSearchResult | null; unavailable: boolean }> {
   const chain = providerChain({ kind: input.kind, hasBarcode: Boolean(input.barcode) });
-  let unavailable = false;
 
-  /** Bir kaynağın çökmesi zinciri durdurmasın; sıradaki denensin. */
-  const guard = async <T>(run: () => Promise<T>, fallback: T): Promise<T> => {
-    try {
-      return await run();
-    } catch (error) {
-      if (error instanceof NutritionUnavailableError) {
-        unavailable = true;
-        return fallback;
-      }
-      throw error;
-    }
-  };
+  /**
+   * Zincir GÜVENİLİRLİK sırasına göre dizili. Üstteki kaynak geçici olarak
+   * düştüğünde alttakine geçmek, o yiyecek için daha zayıf bir kaynağı cevap
+   * diye sunmak oluyor: USDA hız sınırına takılınca "yulaf" araması paketli
+   * ürün veritabanından "Plant-Based Oat Drink" (47 kcal), "pirinç" araması
+   * "Rice and wheat cereal" (298) döndürüyordu.
+   *
+   * Yanlış değer göstermektense "şu anda bakılamadı" demek daha dürüst;
+   * kullanıcı birkaç dakika sonra tekrar dener ya da elle girer.
+   */
+  const KAYNAK_YOK = { result: null, unavailable: true } as const;
 
   // 1) Barkod varsa önce doğrudan barkod aramasını dene
   if (input.barcode) {
     for (const name of chain) {
       const provider = getProvider(name);
       if (!provider.isConfigured() || !provider.getByBarcode) continue;
-      const found = await guard(
-        () => provider.getByBarcode!(input.barcode!, signal),
-        null,
-      );
+
+      let found: NutritionSearchResult | null;
+      try {
+        found = await provider.getByBarcode(input.barcode, signal);
+      } catch (error) {
+        if (error instanceof NutritionUnavailableError) return KAYNAK_YOK;
+        throw error;
+      }
+
       // Barkod eşleşmesi de makul olmalı: kaynaktaki hatalı kayıt, ürün doğru
       // bulunduğu için daha da inandırıcı görünür.
-      if (found && isPlausible(found.per100)) return { result: found, unavailable };
+      if (found && isPlausible(found.per100)) {
+        return { result: found, unavailable: false };
+      }
     }
   }
 
   // 2) Metin sorgularıyla zinciri sırayla dene
   const queries = input.queries.filter((query) => query.trim().length > 0).slice(0, 3);
-  if (queries.length === 0) return { result: null, unavailable };
+  if (queries.length === 0) return { result: null, unavailable: false };
 
   for (const name of chain) {
     const provider = getProvider(name);
     if (!provider.isConfigured()) continue;
 
     for (const query of queries) {
-      const results = await guard(
-        () => provider.search({ query, brand: input.brand, kind: input.kind }, signal),
-        [] as NutritionSearchResult[],
-      );
+      let results: NutritionSearchResult[];
+      try {
+        results = await provider.search({ query, brand: input.brand, kind: input.kind }, signal);
+      } catch (error) {
+        if (error instanceof NutritionUnavailableError) return KAYNAK_YOK;
+        throw error;
+      }
+
       const best = pickBest(results, query);
-      if (best) return { result: best, unavailable };
+      if (best) return { result: best, unavailable: false };
     }
   }
 
-  return { result: null, unavailable };
+  return { result: null, unavailable: false };
 }
 
 /** Barkod için özel, kısa zincir (barkod endpoint'i tarafından kullanılır). */
@@ -144,13 +153,32 @@ function benzer(a: string, b: string): boolean {
  */
 const TUREV_NITELEMELERI = new Set([
   // parça ya da türev
-  "white", "whites", "yolk", "yolks", "bran", "germ", "oil", "juice",
-  "powder", "extract", "flour", "skin", "peel", "seed", "seeds", "leaf",
-  "leaves", "husk", "syrup",
+  "whites", "yolk", "yolks", "bran", "germ", "oil", "juice",
+  "powder", "extract", "flour", "skin", "peel", "husk", "syrup",
   // ürünü baştan başka bir şey yapan işlemler
-  "breaded", "battered", "candied", "sweetened", "dehydrated", "dried",
-  "dry", "concentrate", "concentrated", "mix", "flavored", "flavoured",
+  "breaded", "battered", "candied", "sweetened", "dehydrated",
+  "concentrate", "concentrated", "mix", "flavored", "flavoured",
   "flavor", "flavour", "instant",
+]);
+
+/*
+ * "white", "dry", "dried", "seeds", "leaves" BİLEREK listede yok: bunlar
+ * meşru çeşit adları da olabiliyor ("Rice, white, long-grain" hâlâ pirinç,
+ * kuru fasulye zaten kuru satılıyor). Liste onları içerirken doğru sonuçlar
+ * eleniyordu.
+ */
+
+/**
+ * Yiyeceğin sade/bütün hâlini gösteren işaretler. Ceza değil ÖDÜL: doğru
+ * sonucu elemeden beraberliği doğru yöne kırar.
+ *
+ * "egg" araması için "Eggs, Grade A, Large, egg white" ile "...egg whole"
+ * kelime sayısı bakımından birebir aynı puanı alıyor ve kaynağın sıralaması
+ * belirleyici oluyordu. "whole" bunu çözüyor.
+ */
+const BUTUN_GIDA_ISARETLERI = new Set([
+  "whole", "plain", "regular", "raw", "fresh", "cooked",
+  "unsweetened", "unsalted", "nfs", "ns",
 ]);
 
 /**
@@ -162,13 +190,13 @@ const TUREV_NITELEMELERI = new Set([
  *    Kelime torbası tek başına "grilled cheese sandwich" ile "grilled chicken
  *    sandwich, WITH CHEESE" arasını ayıramıyor — üçü de geçtiği için ikincisi
  *    tam kapsama alıyordu. Sıra bakınca fark ortaya çıkıyor.
- *  - baş kelime: USDA açıklamaları "Yiyecek, niteleyici, niteleyici" biçiminde
- *    ve ayırt edici olan ilk kelime ("oats" → "Oil, oat" hatası buradan)
+ *  - baş bölüm: ilk virgülden önceki kısım yiyeceğin kendisi ("oats" →
+ *    "Oil, oat" ve "rice" → "Rice crackers" hataları buradan yakalanıyor)
  *  - sadelik: sorguda karşılığı olmayan fazladan kelime ne kadar azsa aday o
  *    kadar yakın. Bu olmadan "Egg, whole, raw" ile "Eggs, Grade A, Large, egg
  *    white" tam puanda berabere kalıyor ve listede önce geleni kazanıyordu.
  *
- * Baş kelime tek başına belirleyici değil: Open Food Facts adları serbest ürün
+ * Baş bölüm tek başına belirleyici değil: Open Food Facts adları serbest ürün
  * adı ("Turkish Sessame Bagel Simit") ve aranan kelime sonda kalabiliyor.
  */
 export function relevance(query: string, name: string): number {
@@ -178,7 +206,18 @@ export function relevance(query: string, name: string): number {
 
   const istendi = (word: string) => q.some((other) => benzer(word, other));
 
-  const basEslesti = q.some((word) => benzer(n[0], word)) ? 1 : 0;
+  /*
+   * Adın ilk virgülden önceki kısmı yiyeceğin KENDİSİ, sonrası nitelemedir:
+   * "Rice, white, long-grain, cooked" → "rice". Bileşik bir ad ise virgül yok
+   * ve baş bölüm bütünüyle başka bir yiyeceği anlatır: "Rice crackers" (416
+   * kcal), "Egg Noodle" (339). Sorgu baş bölümün TAMAMINA denk geliyorsa
+   * doğru yiyecek; yalnızca ilk kelimesine denk geliyorsa şüpheli.
+   */
+  const bas = tokens(name.split(",")[0]);
+  const basTamOrtusme =
+    bas.length === q.length && bas.every((word) => istendi(word));
+  const basPuan = basTamOrtusme ? 1 : bas.length > 0 && istendi(bas[0]) ? 0.5 : 0;
+
   const kapsanan = q.filter((word) => n.some((other) => benzer(other, word))).length / q.length;
 
   // Tek kelimelik sorguda çift yok; bileşeni nötr bırak, yoksa hepsi cezalanır.
@@ -197,7 +236,11 @@ export function relevance(query: string, name: string): number {
   const fazla = n.filter((word) => !istendi(word)).length;
   const sadelik = 1 / (1 + fazla / 3);
 
-  const puan = kapsanan * 0.4 + bitisik * 0.25 + basEslesti * 0.2 + sadelik * 0.15;
+  const butun = n.some((word) => BUTUN_GIDA_ISARETLERI.has(word)) ? 0.04 : 0;
+  const puan = Math.min(
+    1,
+    kapsanan * 0.4 + bitisik * 0.25 + basPuan * 0.2 + sadelik * 0.15 + butun,
+  );
 
   const turev = n.some((word) => TUREV_NITELEMELERI.has(word) && !istendi(word));
   return turev ? puan * 0.45 : puan;

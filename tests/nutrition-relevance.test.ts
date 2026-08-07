@@ -45,6 +45,20 @@ describe("türev niteleme cezası", () => {
   });
 });
 
+describe("baş bölüm (ilk virgüle kadar)", () => {
+  it("bileşik ad başka bir yiyecektir", () => {
+    // "Rice crackers" pirinç değil, pirinç krakeri (416 kcal). Virgülsüz
+    // bileşik ad; "Rice, white, ..." ise pirincin kendisi + nitelemeleri.
+    yener("rice", "Rice, white, long-grain, regular, cooked", "Rice crackers");
+    yener("egg", "Eggs, Grade A, Large, egg whole", "Egg Noodle");
+  });
+
+  it("USDA'nın hazır yemek kaydı ham madde aramasını çalmaz", () => {
+    // FNDDS ham madde zincirinden çıkarıldı ama aday yine de düşük kalmalı
+    yener("egg", "Eggs, Grade A, Large, egg whole", "Egg, Benedict");
+  });
+});
+
 describe("ilgi eşiği", () => {
   it("kelimeleri içeren ama başka olan yemek eşiğin altında kalır", () => {
     // USDA'nın kaşarlı tost aramasına verdiği gerçek yanıt. İçinde "grilled",

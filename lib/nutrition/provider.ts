@@ -47,11 +47,19 @@ export function providerChain(input: {
     case "branded_packaged":
       return ["open_food_facts", "fatsecret"];
 
-    // Türk mutfağı: USDA Amerikan gıda kompozisyonuna dayanıyor, mercimek
-    // çorbası ya da menemen gibi yemekler orada yok. Türkçe kaynaklar önce
-    // denenir, USDA yalnızca son çare.
+    /*
+     * Ev yemeği. Open Food Facts PAKETLİ ürün veritabanı: "pilav" arayınca
+     * "Tatlı Ekşi Soslu Tavuk & Basmati Pirinç Pilavı" gibi hazır yemekler
+     * döndürüyor — ev yapımı için sistematik olarak yanlış.
+     *
+     * USDA'nın Survey (FNDDS) seti ise pişmiş yemek kayıtlarından oluşuyor ve
+     * Türk mutfağına şaşırtıcı biçimde yakın karşılıklar içeriyor: "Soup,
+     * lentil" 60 kcal, "Rice pilaf" 137, "Eggplant and meat casserole" 96.
+     * Bu yüzden önce USDA; OFF, FNDDS'te karşılığı olmayanlar (simit, ayran,
+     * beyaz peynir) için arkada duruyor.
+     */
     case "turkish_or_restaurant":
-      return ["fatsecret", "open_food_facts", "usda"];
+      return ["fatsecret", "usda", "open_food_facts"];
 
     // Evrensel besinler (pirinç, tavuk, yumurta): USDA burada gerçekten iyi,
     // küratörlü ve tutarlı.
