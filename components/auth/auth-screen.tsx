@@ -1,26 +1,44 @@
 "use client";
 
 import { useId, useState, type FormEvent } from "react";
-import { LogIn } from "lucide-react";
+import { LogIn, UserPlus } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 
 /** Oturum yokken gösterilen tek ekran: e-posta + şifre. */
+type Mode = "in" | "up";
+
 export default function AuthScreen() {
   const auth = useAuth();
   const baseId = useId();
 
+  /**
+   * Giriş ve kayıt aynı formu paylaşır ama mod AÇIKÇA seçilir.
+   * Önceden "Kayıt ol" bir bağlantı gibi görünüp aynı formu sessizce kayıt
+   * olarak gönderiyordu; alanlar boşken hiçbir şey olmuyor sanılıyordu.
+   */
+  const [mode, setMode] = useState<Mode>("in");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  async function submit(event: FormEvent<HTMLFormElement>, mode: "in" | "up") {
+  function switchMode(next: Mode) {
+    setMode(next);
+    setError(null);
+    setNotice(null);
+  }
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy) return;
 
-    if (!email.trim() || password.length < 6) {
-      setError("E-posta gir ve şifreyi en az 6 karakter yap.");
+    if (!email.trim()) {
+      setError("E-posta adresini gir.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Şifre en az 6 karakter olmalı.");
       return;
     }
 
@@ -36,10 +54,16 @@ export default function AuthScreen() {
     setBusy(false);
     if (message) {
       setError(message);
-    } else if (mode === "up") {
+      return;
+    }
+
+    if (mode === "up") {
+      // Kayıt başarılı ama oturum açılmadıysa e-posta onayı bekleniyordur.
       setNotice(
-        "Kayıt oluşturuldu. E-posta onayı gerekiyorsa gelen kutunu kontrol et, sonra giriş yap.",
+        "Hesap oluşturuldu. Gelen kutuna onay bağlantısı gönderildi; tıkladıktan sonra buradan giriş yap.",
       );
+      setMode("in");
+      setPassword("");
     }
   }
 
@@ -59,12 +83,43 @@ export default function AuthScreen() {
           </div>
         </div>
 
-        <p className="mt-5 text-sm text-ink-soft">
-          Giriş yaptıktan sonra authenticator uygulamandaki 6 haneli kod istenir.
-          Kayıtlarına yalnızca sen erişebilirsin.
+        {/* Hangi işlemi yaptığın her zaman görünür olsun */}
+        <div
+          role="tablist"
+          aria-label="Giriş ya da kayıt"
+          className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-canvas p-1"
+        >
+          {(
+            [
+              ["in", "Giriş yap"],
+              ["up", "Kayıt ol"],
+            ] as const
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              role="tab"
+              aria-selected={mode === value}
+              onClick={() => switchMode(value)}
+              disabled={busy}
+              className={`min-h-10 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 ${
+                mode === value
+                  ? "bg-surface text-ink shadow-card"
+                  : "text-ink-soft hover:text-ink"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <p className="mt-4 text-sm text-ink-soft">
+          {mode === "in"
+            ? "Şifreni girdikten sonra authenticator uygulamandaki 6 haneli kod istenir."
+            : "Hesap açtıktan sonra ilk girişte authenticator kurulumu yapacaksın."}
         </p>
 
-        <form onSubmit={(event) => submit(event, "in")} noValidate className="mt-5 space-y-3">
+        <form onSubmit={submit} noValidate className="mt-4 space-y-3">
           <div>
             <label
               htmlFor={`${baseId}-email`}
@@ -92,7 +147,8 @@ export default function AuthScreen() {
             <input
               id={`${baseId}-pass`}
               type="password"
-              autoComplete="current-password"
+              // Şifre yöneticisi kayıtta yeni şifre önersin, girişte kayıtlıyı doldursun
+              autoComplete={mode === "in" ? "current-password" : "new-password"}
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               placeholder="En az 6 karakter"
@@ -119,19 +175,12 @@ export default function AuthScreen() {
             disabled={busy}
             className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-brand px-4 font-medium text-white transition-colors hover:bg-brand-strong disabled:opacity-50"
           >
-            <LogIn size={16} aria-hidden="true" />
-            {busy ? "…" : "Giriş yap"}
-          </button>
-
-          <button
-            type="button"
-            disabled={busy}
-            onClick={(event) =>
-              submit(event as unknown as FormEvent<HTMLFormElement>, "up")
-            }
-            className="min-h-11 w-full text-sm text-ink-soft underline disabled:opacity-50"
-          >
-            Hesabın yok mu? Kayıt ol
+            {mode === "in" ? (
+              <LogIn size={16} aria-hidden="true" />
+            ) : (
+              <UserPlus size={16} aria-hidden="true" />
+            )}
+            {busy ? "…" : mode === "in" ? "Giriş yap" : "Hesap oluştur"}
           </button>
         </form>
       </div>
