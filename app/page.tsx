@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import DashboardHeader from "@/components/dashboard/dashboard-header";
 import DashboardPage from "@/components/dashboard/dashboard-page";
+import DataBackup from "@/components/dashboard/data-backup";
 import QuickActions from "@/components/dashboard/quick-actions";
 
 export const metadata: Metadata = {
@@ -17,6 +18,7 @@ export default function Home() {
       <div className="mt-8 space-y-4">
         <DashboardPage />
         <QuickActions />
+        <DataBackup />
       </div>
     </div>
   );

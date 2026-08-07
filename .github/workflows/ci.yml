@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Aynı dal için üst üste gelen çalışmalarda öncekini iptal et
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kontrol:
+    name: Lint, tip, test, derleme
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # netlify.toml ile aynı sürüm; ikisi ayrışırsa CI yeşil olup
+          # dağıtım patlayabilir.
+          node-version: "20"
+          cache: npm
+
+      - name: Bağımlılıklar
+        run: npm ci
+
+      - name: ESLint
+        run: npm run lint
+
+      - name: TypeScript
+        run: npx tsc --noEmit
+
+      - name: Testler
+        run: npm test
+
+      # Ortam değişkeni verilmiyor: uygulama eksik yapılandırmayla da
+      # derlenebilmeli. Boş değişkenlerin varsayılana düştüğü daha önce
+      # bir hataya yol açmıştı (app/layout.tsx'te new URL("")).
+      - name: Derleme
+        run: npm run build
