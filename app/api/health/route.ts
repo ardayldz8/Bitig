@@ -1,6 +1,12 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
+  FOOD_TEXT_JSON_SCHEMA,
+  FOOD_TEXT_SYSTEM_PROMPT,
+  foodTextResultSchema,
+} from "@/lib/ai/food-text-schema";
+import { AI_SECURITY_PREAMBLE, wrapUntrusted } from "@/lib/ai/security";
+import {
   env,
   githubAppStatus,
   openRouterStatus,
@@ -65,21 +71,52 @@ export async function GET(request: Request) {
         Authorization: `Bearer ${env.openRouterKey()}`,
         "Content-Type": "application/json",
       },
+      /*
+       * GERÇEK yolun aynısı: yapılandırılmış çıktı + aynı şema + aynı prompt.
+       * Basit bir "OK yaz" isteği canlıda sorunsuz geçiyordu ama kullanıcının
+       * yaşadığı hata bu yolda değildi — teşhis, hata veren çağrının kendisini
+       * taklit etmeli.
+       */
       body: JSON.stringify({
         model: env.projectModel(),
-        max_tokens: 20,
-        messages: [{ role: "user", content: "Yalnızca OK yaz." }],
+        temperature: 0.2,
+        max_tokens: 2500,
+        messages: [
+          { role: "system", content: `${AI_SECURITY_PREAMBLE}
+
+${FOOD_TEXT_SYSTEM_PROMPT}` },
+          {
+            role: "user",
+            content: `${wrapUntrusted("kullanici_metni", "az önce tost yedim")}
+
+Bu metinden yiyecekleri çıkar.`,
+          },
+        ],
+        response_format: { type: "json_schema", json_schema: FOOD_TEXT_JSON_SCHEMA },
       }),
       signal: AbortSignal.timeout(20_000),
     });
 
     const govde = await response.text();
-    ai = {
-      status: response.status,
-      ms: Date.now() - t0,
-      // Hata gövdesi anahtar içermez; OpenRouter'ın mesajı teşhis için şart
-      body: response.ok ? "ok" : govde.slice(0, 300),
-    };
+    if (!response.ok) {
+      ai = { status: response.status, ms: Date.now() - t0, body: govde.slice(0, 300) };
+    } else {
+      // Şema doğrulaması da burada: kullanıcının gördüğü hata buradan da gelebilir
+      const payload = JSON.parse(govde) as {
+        choices?: { message?: { content?: string }; finish_reason?: string }[];
+      };
+      const icerik = payload.choices?.[0]?.message?.content;
+      const parsed = icerik ? foodTextResultSchema.safeParse(JSON.parse(icerik)) : null;
+      ai = {
+        status: 200,
+        ms: Date.now() - t0,
+        finish: payload.choices?.[0]?.finish_reason ?? null,
+        contentLength: icerik?.length ?? 0,
+        schemaOk: parsed?.success ?? false,
+        items: parsed?.success ? parsed.data.items.length : null,
+        schemaError: parsed && !parsed.success ? JSON.stringify(parsed.error.issues[0]).slice(0, 200) : null,
+      };
+    }
   } catch (error) {
     ai = {
       status: null,
