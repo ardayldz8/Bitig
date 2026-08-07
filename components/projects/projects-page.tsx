@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useId, useMemo, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Github } from "lucide-react";
 import Modal from "@/components/ui/modal";
@@ -117,9 +117,24 @@ export default function ProjectsPage({
     [params, router],
   );
 
-  // Hiç seçim yoksa ilk projeyi seç
+  /**
+   * Açılışta ilk projeyi seç — YALNIZCA BİR KEZ.
+   *
+   * Ref olmadan "Projelere dön" çalışmıyordu: düğme seçimi temizliyor,
+   * selectedId null oluyor ve bu effect aynı anda ilk projeyi geri seçiyordu.
+   * Kullanıcı açısından düğme hiç tepki vermemiş gibi görünüyordu.
+   *
+   * Karar hydrate olur olmaz veriliyor (proje listesi boş olsa bile): aksi
+   * hâlde ilk proje oluşturulduğunda bayrak hâlâ kapalı kalıyor ve aynı hata
+   * o anda geri geliyordu.
+   */
+  const ilkSecimYapildi = useRef(false);
   useEffect(() => {
-    if (!library.hydrated || selectedId || library.projects.length === 0) return;
+    if (ilkSecimYapildi.current || !library.hydrated) return;
+    ilkSecimYapildi.current = true;
+
+    // Derin bağlantıyla gelinmişse ya da hiç proje yoksa dokunma
+    if (selectedId || library.projects.length === 0) return;
     setParam({ project: library.projects[0].id });
   }, [library.hydrated, library.projects, selectedId, setParam]);
 
