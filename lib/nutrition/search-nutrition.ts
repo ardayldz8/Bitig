@@ -84,7 +84,7 @@ export async function resolveNutritionDetailed(
         () => provider.search({ query, brand: input.brand, kind: input.kind }, signal),
         [] as NutritionSearchResult[],
       );
-      const best = pickBest(results);
+      const best = pickBest(results, query);
       if (best) return { result: best, unavailable };
     }
   }
@@ -109,7 +109,7 @@ export async function resolveByBarcode(
     } else {
       // Barkod endpoint'i yoksa ürün kodunu metin olarak ara
       const results = await provider.search({ query: barcode }, signal);
-      const best = pickBest(results);
+      const best = pickBest(results, barcode);
       if (best) return best;
     }
   }
@@ -117,16 +117,58 @@ export async function resolveByBarcode(
   return null;
 }
 
+function tokens(value: string): string[] {
+  return value
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .split(" ")
+    .filter((word) => word.length > 1);
+}
+
+/** Tekil/çoğul farkını yutan gevşek eşleşme ("oat" ↔ "oats"). */
+function benzer(a: string, b: string): boolean {
+  if (a === b) return true;
+  return a.length >= 3 && b.length >= 3 && (a.startsWith(b) || b.startsWith(a));
+}
+
 /**
- * Kalorisi sıfır olmayan ve fiziksel olarak mümkün ilk sonucu seçer.
+ * Sonucun sorguyla ne kadar ilgili olduğu (0–1).
+ *
+ * Baş kelime ağırlıklı: USDA açıklamaları "Yiyecek, niteleyici, niteleyici"
+ * biçiminde ve ayırt edici olan ilk kelime. "oats" araması "Oil, oat" (yulaf
+ * YAĞI, 884 kcal) sonucunu ilk sırada döndürüyordu — değer makul olduğu için
+ * makullük filtresi yakalayamıyor, yanlış olan yiyeceğin kendisi.
+ */
+export function relevance(query: string, name: string): number {
+  const q = tokens(query);
+  const n = tokens(name);
+  if (q.length === 0 || n.length === 0) return 0;
+
+  const basEslesti = q.some((word) => benzer(n[0], word)) ? 1 : 0;
+  const kapsanan = q.filter((word) => n.some((other) => benzer(other, word))).length / q.length;
+
+  return basEslesti * 0.6 + kapsanan * 0.4;
+}
+
+/**
+ * Kalorisi sıfır olmayan, fiziksel olarak mümkün ve sorguya en ilgili sonucu
+ * seçer.
  *
  * Kaynaklar topluluk verisi içeriyor; "rice" araması 1900 kcal/100 g döndüren
  * bir kayda denk gelebiliyor. Böyle bir değeri göstermek, kalori uydurmakla
  * aynı sonucu doğurur.
  */
-function pickBest(results: NutritionSearchResult[]): NutritionSearchResult | null {
-  return (
-    results.find((item) => item.per100.caloriesPer100 > 0 && isPlausible(item.per100)) ??
-    null
+function pickBest(
+  results: NutritionSearchResult[],
+  query: string,
+): NutritionSearchResult | null {
+  const uygun = results.filter(
+    (item) => item.per100.caloriesPer100 > 0 && isPlausible(item.per100),
+  );
+  if (uygun.length === 0) return null;
+
+  // Eşit puanda kaynağın kendi sıralaması korunur (reduce ilkini tutar).
+  return uygun.reduce((best, item) =>
+    relevance(query, item.name) > relevance(query, best.name) ? item : best,
   );
 }

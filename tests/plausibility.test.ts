@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { checkPlausibility, isPlausible } from "@/lib/nutrition/plausibility";
+import { relevance } from "@/lib/nutrition/search-nutrition";
 import type { NutritionPer100 } from "@/types/nutrition";
 
 const per100 = (
@@ -66,5 +67,36 @@ describe("besin değeri makullük kontrolü", () => {
   it("lif ve poliol sapmasına tolerans gösterir", () => {
     // Yüksek lifli kepek: lif karbonhidrata yazılır ama tam 4 kcal/g vermez
     expect(isPlausible(per100(230, 16, 65, 4))).toBe(true);
+  });
+});
+
+describe("arama sonucu alaka puanı", () => {
+  it("yulaf yerine yulaf yağını seçmez", () => {
+    // Gerçek hata: USDA "oats" için "Oil, oat" (884 kcal) sonucunu ilk sırada
+    // döndürüyordu. Değer makul olduğu için makullük filtresi yakalamıyor —
+    // yanlış olan yiyeceğin kendisi.
+    expect(relevance("oats", "Oats, raw")).toBeGreaterThan(
+      relevance("oats", "Oil, oat"),
+    );
+  });
+
+  it("baş kelime eşleşmesini öne alır", () => {
+    // USDA açıklamaları "Yiyecek, niteleyici" biçiminde; ayırt edici olan ilk kelime
+    expect(relevance("butter", "Butter, salted")).toBeGreaterThan(
+      relevance("butter", "Peanut butter, smooth"),
+    );
+  });
+
+  it("tekil/çoğul farkını yutar", () => {
+    expect(relevance("egg", "Eggs, whole, raw")).toBeGreaterThan(0.9);
+  });
+
+  it("alakasız sonuca düşük puan verir", () => {
+    expect(relevance("chicken breast", "Bread, white")).toBeLessThan(0.4);
+  });
+
+  it("boş girdide çökmez", () => {
+    expect(relevance("", "Oats")).toBe(0);
+    expect(relevance("oats", "")).toBe(0);
   });
 });
