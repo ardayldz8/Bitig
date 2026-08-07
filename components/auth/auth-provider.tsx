@@ -52,7 +52,6 @@ export type AuthValue = {
   userEmail: string | null;
 
   signInWithPassword: (email: string, password: string) => Promise<string | null>;
-  signUp: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
 
   /** Yeni TOTP faktörü oluşturur; henüz doğrulanmamıştır. */
@@ -178,15 +177,9 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
     [],
   );
 
-  const signUp = useCallback(
-    async (email: string, password: string): Promise<string | null> => {
-      const client = clientRef.current;
-      if (!client) return "Supabase yapılandırılmamış.";
-      const { error } = await client.auth.signUp({ email, password });
-      return error ? friendly(error.message) : null;
-    },
-    [],
-  );
+  // Kayıt olma yolu kaldırıldı: uygulama tek kişilik ve hesap açıldı.
+  // Sarmalayıcıyı bırakmak, ileride farkında olmadan yeniden bağlanmasına
+  // davetiye çıkarırdı.
 
   const signOut = useCallback(async () => {
     await clientRef.current?.auth.signOut();
@@ -285,7 +278,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       userId: session?.user?.id ?? null,
       userEmail: session?.user?.email ?? null,
       signInWithPassword,
-      signUp,
       signOut,
       startTotpEnrollment,
       confirmTotpEnrollment,
@@ -295,7 +287,6 @@ export default function AuthProvider({ children }: { children: React.ReactNode }
       status,
       session,
       signInWithPassword,
-      signUp,
       signOut,
       startTotpEnrollment,
       confirmTotpEnrollment,
