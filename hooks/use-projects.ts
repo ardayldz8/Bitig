@@ -42,6 +42,8 @@ export type ProjectsApi = ProjectsState & {
   error: string | null;
 
   signOut: () => Promise<void>;
+  /** Veriyi sunucudan yeniden çeker (ör. GitHub senkronizasyonu sonrası). */
+  reload: () => Promise<void>;
 
   createProject: (input: ProjectInput) => Promise<Project | null>;
   updateProject: (id: string, input: ProjectInput) => Promise<void>;
@@ -562,6 +564,7 @@ export function useProjects(): ProjectsApi {
     accessToken: session?.access_token ?? null,
     error,
     signOut,
+    reload,
     createProject,
     updateProject,
     deleteProject,

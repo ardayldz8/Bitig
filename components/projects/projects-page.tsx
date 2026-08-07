@@ -22,9 +22,11 @@ import ProjectStats, { type StatsData } from "@/components/projects/project-stat
 import ProjectTasks from "@/components/projects/project-tasks";
 import ProjectsHeader from "@/components/projects/projects-header";
 import RepositoryPicker from "@/components/projects/repository-picker";
+import { useAuth } from "@/components/auth/auth-provider";
 import { useProjects } from "@/hooks/use-projects";
 import { useActionParam } from "@/hooks/use-action-param";
 import { useGithubInstallation } from "@/hooks/use-github-installation";
+import { loadSnapshots, saveSnapshot } from "@/lib/projects/github-snapshot";
 import { computeHealth } from "@/lib/projects/health";
 import { computeMetrics } from "@/lib/projects/metrics";
 import type { FeatureInput, NoteInput, ProjectInput } from "@/lib/projects/validation";
@@ -61,6 +63,7 @@ export default function ProjectsPage({
   integrations: IntegrationsSnapshot;
 }) {
   const library = useProjects();
+  const { client: supabase } = useAuth();
   const router = useRouter();
   const params = useSearchParams();
   const confirmId = useId();
@@ -119,6 +122,33 @@ export default function ProjectsPage({
     if (!library.hydrated || selectedId || library.projects.length === 0) return;
     setParam({ project: library.projects[0].id });
   }, [library.hydrated, library.projects, selectedId, setParam]);
+
+  /**
+   * Kaydedilmiş GitHub anlık görüntülerini yükle.
+   *
+   * Senkronizasyon sonucu artık veritabanında; açılışta okunmazsa PR sayısı ve
+   * son commit her yenilemede sıfırlanmış görünür.
+   */
+  const projectIdsKey = library.projects.map((project) => project.id).join(",");
+  useEffect(() => {
+    if (!supabase || projectIdsKey === "") return;
+
+    let cancelled = false;
+    void loadSnapshots(supabase, projectIdsKey.split(","))
+      .then((stored) => {
+        if (cancelled) return;
+        // Bu oturumda senkronize edilenler korunur: taze veri, kayıtlı
+        // görüntüden daha günceldir (dosya ağacı ve branch'ler de dolu).
+        setSnapshots((prev) => ({ ...stored, ...prev }));
+      })
+      .catch(() => {
+        // Okunamazsa sayfa çalışmaya devam eder; "Senkronize et" hâlâ mümkün
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [supabase, projectIdsKey]);
 
   /**
    * GitHub bağlantısı. URL'deki installation_id kurulumdan dönüşte bir kez
@@ -463,7 +493,16 @@ export default function ProjectsPage({
         typeof payload === "object" && payload !== null
           ? ((payload as { snapshot?: RepositorySnapshot }).snapshot ?? null)
           : null;
-      if (snap) setSnapshots((prev) => ({ ...prev, [selected.id]: snap }));
+      if (snap) {
+        setSnapshots((prev) => ({ ...prev, [selected.id]: snap }));
+
+        // Veritabanına da yaz: yalnızca state'te kalsaydı sayfa yenilenince
+        // PR sayısı, son commit ve CI durumu kaybolurdu.
+        if (supabase) {
+          await saveSnapshot(supabase, selected.id, snap);
+          await library.reload();
+        }
+      }
     } catch (error) {
       setSyncError(
         error instanceof Error ? error.message : "Repository senkronize edilemedi.",
@@ -471,7 +510,7 @@ export default function ProjectsPage({
     } finally {
       setSyncing(false);
     }
-  }, [githubHeaders, installationId, selected]);
+  }, [githubHeaders, installationId, selected, supabase, library]);
 
   const closeDialog = () => {
     setDialog({ type: "none" });

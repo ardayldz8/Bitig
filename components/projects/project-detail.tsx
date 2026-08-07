@@ -79,7 +79,8 @@ export default function ProjectDetail({
               <p className="mt-0.5 text-sm text-ink-soft">{project.description}</p>
             )}
 
-            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs text-ink-soft">
+            {/* Dar ekranda gap-x-4 satırı sıkıştırıyordu; ayraçlarla okunur hâle geliyor */}
+            <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-ink-soft">
               <span>
                 Oluşturulma:{" "}
                 {Number.isNaN(created.getTime())
