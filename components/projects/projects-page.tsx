@@ -591,9 +591,16 @@ export default function ProjectsPage({
           </div>
         </div>
       ) : (
-        <div className="mt-6 grid gap-4 lg:grid-cols-[300px_1fr]">
-          {/* Mobilde: proje seçiliyken liste gizlenir */}
-          <div className={selected ? "hidden lg:block" : "block"}>
+        <div className="mt-6 grid min-w-0 gap-4 lg:grid-cols-[300px_minmax(0,1fr)]">
+          {/*
+            `min-w-0`: grid track'i varsayılan olarak `auto`, yani içeriğin
+            min-content genişliğinin altına inemiyor. Uzun commit mesajları ve
+            sekme şeridi track'i 638px'e şişirip tüm sayfayı yatay
+            kaydırılabilir yapıyordu (375px ekranda belge 654px oluyordu).
+
+            Mobilde: proje seçiliyken liste gizlenir.
+          */}
+          <div className={`min-w-0 ${selected ? "hidden lg:block" : "block"}`}>
             <ProjectSidebar
               projects={visibleProjects}
               selectedId={selected?.id ?? null}
@@ -606,7 +613,7 @@ export default function ProjectsPage({
             />
           </div>
 
-          <div className={selected ? "block" : "hidden lg:block"}>
+          <div className={`min-w-0 ${selected ? "block" : "hidden lg:block"}`}>
             {selected ? (
               <ProjectDetail
                 project={selected}
