@@ -1,7 +1,9 @@
 "use client";
 
 import { useId, useState, type FormEvent, type ReactNode } from "react";
+import { Github, X } from "lucide-react";
 import Modal from "@/components/ui/modal";
+import RepositoryList, { type Repo } from "@/components/projects/repository-list";
 import { fieldErrors, projectInputSchema, type ProjectInput } from "@/lib/projects/validation";
 import { PROJECT_STATUS_LABELS, type Project, type ProjectStatus } from "@/types/project";
 
@@ -10,10 +12,15 @@ const fieldClass = "min-h-11 w-full rounded-xl border bg-surface px-3.5 py-2.5 t
 
 export default function ProjectFormModal({
   project,
+  installationId,
+  accessToken,
   onSave,
   onClose,
 }: {
   project: Project | null;
+  /** GitHub bağlı değilse null — o zaman repo yalnızca elle yazılabilir. */
+  installationId: number | null;
+  accessToken: string | null;
   onSave: (input: ProjectInput) => void;
   onClose: () => void;
 }) {
@@ -26,6 +33,27 @@ export default function ProjectFormModal({
     githubFullName: project?.githubFullName ?? "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [listeAcik, setListeAcik] = useState(false);
+
+  /**
+   * Repo seçilince ilgili alanları doldurur.
+   *
+   * Ad, açıklama ve teknoloji YALNIZCA boşsa doldurulur: kullanıcı bir şey
+   * yazdıysa onu ezmek, elle girdiği veriyi sessizce yok etmek olurdu.
+   */
+  function repoSec(repo: Repo) {
+    setValues((v) => ({
+      ...v,
+      githubFullName: repo.fullName,
+      name: v.name.trim() ? v.name : repo.name,
+      description: v.description.trim() ? v.description : (repo.description ?? ""),
+      technologies: v.technologies.trim()
+        ? v.technologies
+        : (repo.language ?? ""),
+    }));
+    setErrors((previous) => ({ ...previous, githubFullName: "" }));
+    setListeAcik(false);
+  }
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -106,20 +134,58 @@ export default function ProjectFormModal({
             label="GitHub repository (opsiyonel)"
             error={errors.githubFullName}
           >
-            <input
-              id={id("repo")}
-              type="text"
-              autoComplete="off"
-              value={values.githubFullName}
-              onChange={(event) =>
-                setValues((v) => ({ ...v, githubFullName: event.target.value }))
-              }
-              placeholder="kullanici/repo"
-              aria-invalid={errors.githubFullName ? true : undefined}
-              className={`${fieldClass} ${errors.githubFullName ? "border-danger" : "border-line"}`}
-            />
+            <div className="flex gap-2">
+              <input
+                id={id("repo")}
+                type="text"
+                autoComplete="off"
+                value={values.githubFullName}
+                onChange={(event) =>
+                  setValues((v) => ({ ...v, githubFullName: event.target.value }))
+                }
+                placeholder="kullanici/repo"
+                aria-invalid={errors.githubFullName ? true : undefined}
+                className={`${fieldClass} ${errors.githubFullName ? "border-danger" : "border-line"}`}
+              />
+              {/* GitHub bağlı değilken düğme gösterilmez: açılacak liste yok */}
+              {installationId !== null && (
+                <button
+                  type="button"
+                  onClick={() => setListeAcik((acik) => !acik)}
+                  aria-expanded={listeAcik}
+                  className={`inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl border px-3 text-sm font-medium transition-colors ${
+                    listeAcik
+                      ? "border-brand bg-brand-soft text-brand"
+                      : "border-line text-ink-soft hover:border-brand hover:text-brand"
+                  }`}
+                >
+                  {listeAcik ? (
+                    <X size={15} aria-hidden="true" />
+                  ) : (
+                    <Github size={15} aria-hidden="true" />
+                  )}
+                  {listeAcik ? "Kapat" : "Seç"}
+                </button>
+              )}
+            </div>
           </Field>
         </div>
+
+        {/*
+          Liste form akışının içinde açılıyor, ikinci bir Modal olarak değil:
+          Modal, Escape ve Tab yakalayıcılarını document'a bağlıyor ve iç içe
+          iki tane olsaydı Escape her ikisini birden kapatırdı.
+        */}
+        {listeAcik && installationId !== null && (
+          <div className="rounded-xl border border-line-strong bg-canvas p-3.5">
+            <RepositoryList
+              installationId={installationId}
+              accessToken={accessToken}
+              onPick={repoSec}
+              maxHeightClass="max-h-56"
+            />
+          </div>
+        )}
 
         <Field id={id("tech")} label="Teknolojiler (virgülle ayır)">
           <input

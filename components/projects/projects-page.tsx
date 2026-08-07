@@ -776,6 +776,9 @@ export default function ProjectsPage({
       {dialog.type === "project" && (
         <ProjectFormModal
           project={dialog.project}
+          // GitHub bağlıysa repo elle yazılmak yerine listeden seçilebilir
+          installationId={githubConnected ? installationId : null}
+          accessToken={library.accessToken}
           onSave={(input: ProjectInput) => {
             if (dialog.project) {
               void library.updateProject(dialog.project.id, input);
