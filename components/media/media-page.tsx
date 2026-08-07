@@ -9,6 +9,7 @@ import MediaFormModal from "@/components/media/media-form-modal";
 import MediaHeader from "@/components/media/media-header";
 import MediaList from "@/components/media/media-list";
 import MediaToolbar from "@/components/media/media-toolbar";
+import RecommendationPanel from "@/components/ui/recommendation-panel";
 import { useMediaLibrary, type MediaDraft } from "@/hooks/use-media-library";
 import { useActionParam } from "@/hooks/use-action-param";
 import {
@@ -149,6 +150,26 @@ export default function MediaPage() {
       />
 
       <div className="mt-7 space-y-4">
+        <RecommendationPanel
+          kind="media"
+          onAdd={(item) =>
+            library.addEntry({
+              title: item.catalog.title,
+              // Öneri "series" ya da "movie" olarak doğrulandı
+              mediaType: item.kind === "movie" ? "movie" : "series",
+              releaseYear: item.catalog.year,
+              // Henüz izlenmedi: planlanan olarak girer, ilerleme uydurulmaz
+              status: "planned",
+              rating: null,
+              posterUrl: item.catalog.imageUrl,
+              currentSeason: null,
+              currentEpisode: null,
+              totalSeasons: null,
+              totalEpisodes: null,
+              watchedEpisodes: null,
+            })
+          }
+        />
         <MediaToolbar
           query={query}
           onQueryChange={setQuery}

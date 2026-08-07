@@ -6,6 +6,7 @@ import MangaCard from "@/components/manga/manga-card";
 import MangaDeleteDialog from "@/components/manga/manga-delete-dialog";
 import MangaFormModal from "@/components/manga/manga-form-modal";
 import MangaToolbar from "@/components/manga/manga-toolbar";
+import RecommendationPanel from "@/components/ui/recommendation-panel";
 import { useMangaLibrary } from "@/hooks/use-manga-library";
 import { useActionParam } from "@/hooks/use-action-param";
 import { searchMangas, sortMangas } from "@/lib/manga";
@@ -80,6 +81,22 @@ export default function MangaPage() {
       </header>
 
       <div className="mt-7">
+        <RecommendationPanel
+          kind="manga"
+          onAdd={(item) =>
+            addManga({
+              name: item.catalog.title,
+              // Henüz okunmadı; bölüm 0 ve puan 0 ile "okuyorum" olarak girer
+              currentChapter: 0,
+              rating: 0,
+              status: "reading",
+              coverUrl: item.catalog.imageUrl,
+            })
+          }
+        />
+      </div>
+
+      <div className="mt-5">
         <MangaToolbar
           query={query}
           onQueryChange={setQuery}
