@@ -102,3 +102,62 @@ select cron.schedule(
 -- Kontrol:
 --   select * from cron.job where jobname = 'bitig-hatirlatmalar';
 --   select * from cron.job_run_details order by start_time desc limit 5;
+
+-- ------------------------------------------------------ Haftalık yedek
+
+/*
+ * Elle dışa aktarma zaten var ama insan unutur. Kişisel takip uygulaması
+ * yıllarca veri biriktiriyor; tek bir kazara silme her şeyi götürür.
+ *
+ * Adres ve sır hatırlatma işiyle ORTAK — ayrı bir sır tutmak, birini
+ * döndürünce diğerini unutmaya davetiye çıkarırdı.
+ */
+create or replace function public.dispatch_weekly_backup()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  site_url text;
+  gizli    text;
+begin
+  select decrypted_secret into site_url
+  from vault.decrypted_secrets where name = 'bitig_site_url';
+
+  select decrypted_secret into gizli
+  from vault.decrypted_secrets where name = 'bitig_dispatch_secret';
+
+  if site_url is null or gizli is null then
+    raise warning 'Bitig: yedekleme sırları Vault''ta yok, atlandı';
+    return;
+  end if;
+
+  perform net.http_post(
+    url     := site_url || '/api/backup/auto',
+    body    := '{}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-dispatch-secret', gizli
+    ),
+    -- Yedek almak dakikalık hatırlatmadan uzun sürüyor
+    timeout_milliseconds := 120000
+  );
+end;
+$$;
+
+revoke all on function public.dispatch_weekly_backup() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'bitig-haftalik-yedek') then
+    perform cron.unschedule('bitig-haftalik-yedek');
+  end if;
+end $$;
+
+-- Pazar 03:15 UTC (Türkiye'de 06:15) — kullanım en düşükken
+select cron.schedule(
+  'bitig-haftalik-yedek',
+  '15 3 * * 0',
+  $$select public.dispatch_weekly_backup()$$
+);

@@ -31,9 +31,20 @@ const USER_TABLES = [
   "media_entries",
   "food_entries",
   "nutrition_targets",
+  "notes",
+  "note_reminders",
   "projects",
   "github_installations",
 ] as const;
+
+/*
+ * `push_subscriptions` bilerek yok.
+ *
+ * Cihaza özgü: her abonelik belirli bir tarayıcının push servisindeki uca
+ * bağlı. Başka bir cihaza geri yüklemek ölü uçlar yaratır ve gönderim işi
+ * her dakika onlara boşuna istek atar. Kullanıcı yeni cihazda bildirimleri
+ * tek tıkla yeniden açıyor zaten.
+ */
 
 /**
  * Projeye bağlı tablolar. RLS bunları da kullanıcıya kısıtlıyor (üst projenin
