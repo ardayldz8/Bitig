@@ -8,10 +8,19 @@ export type Manga = {
   status: MangaStatus;
   /** Kapak görseli adresi. Yoksa/yüklenemezse harf yer tutucusu gösterilir. */
   coverUrl: string | null;
+
+  /**
+   * MangaDex kaydının kimliği. Kütüphane Türkçe çeviri adlarla tutulduğu ve
+   * katalog özgün adlarla indeksli olduğu için otomatik eşleşme çalışmıyor
+   * (8 mangada 1 tuttu, o da yanlış esere). Bağ bir kez kurulup saklanıyor.
+   */
+  mangadexId: string | null;
+  /** Katalogdaki en son bölüm. Bağ kurulmamışsa null. */
+  latestChapter: number | null;
 };
 
 /** Kayıt oluşturulurken/düzenlenirken kullanılan, id'siz manga verisi. */
-export type MangaDraft = Omit<Manga, "id">;
+export type MangaDraft = Omit<Manga, "id" | "mangadexId" | "latestChapter">;
 
 export type SortKey =
   | "recent"

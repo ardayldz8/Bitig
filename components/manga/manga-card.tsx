@@ -52,8 +52,18 @@ export default function MangaCard({
   onEdit,
   onDelete,
   onChangeChapter,
-}: MangaCardProps) {
+  onMatch,
+}: MangaCardProps & { onMatch?: (manga: Manga) => void }) {
   const isCompleted = manga.status === "completed";
+
+  /*
+   * Okunmamış bölüm sayısı. Katalog bağı yoksa hesaplanamaz — uydurulmuyor,
+   * onun yerine "eşleştir" çağrısı gösteriliyor.
+   */
+  const yeniBolum =
+    manga.latestChapter !== null && manga.latestChapter > manga.currentChapter
+      ? Math.floor(manga.latestChapter - manga.currentChapter)
+      : 0;
 
   return (
     <article className="flex flex-col gap-4 rounded-card border border-line bg-surface p-4 shadow-card sm:p-5">
@@ -61,6 +71,20 @@ export default function MangaCard({
         <Cover manga={manga} />
 
         <div className="min-w-0 flex-1">
+          {yeniBolum > 0 && (
+            <span className="mb-1 inline-flex items-center rounded-full bg-brand px-2 py-0.5 text-[11px] font-semibold text-white">
+              {yeniBolum} yeni bölüm
+            </span>
+          )}
+          {manga.mangadexId === null && onMatch && (
+            <button
+              type="button"
+              onClick={() => onMatch(manga)}
+              className="mb-1 inline-flex min-h-8 items-center rounded-full border border-dashed border-line-strong px-2.5 text-[11px] text-ink-soft transition-colors hover:border-brand hover:text-brand"
+            >
+              Katalogda eşleştir
+            </button>
+          )}
           <h3 className="truncate text-base font-semibold text-ink sm:text-lg">
             {manga.name}
           </h3>

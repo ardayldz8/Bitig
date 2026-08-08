@@ -59,6 +59,8 @@ export function rowToManga(row: Row): Manga | null {
     rating: rating ?? 0,
     status,
     coverUrl: str(row, "cover_url"),
+    mangadexId: str(row, "mangadex_id"),
+    latestChapter: num(row, "latest_chapter"),
   };
 }
 

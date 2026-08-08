@@ -12,6 +12,12 @@ export type MangaLibrary = {
   hydrated: boolean;
   error: string | null;
   addManga: (draft: MangaDraft) => void;
+  linkCatalog: (
+    id: string,
+    mangadexId: string,
+    latestChapter: number | null,
+    coverUrl: string | null,
+  ) => void;
   updateManga: (id: string, draft: MangaDraft) => void;
   removeManga: (id: string) => void;
   changeChapter: (id: string, delta: number) => void;
@@ -28,7 +34,7 @@ export function useMangaLibrary(): MangaLibrary {
 
   const addManga = useCallback(
     (draft: MangaDraft) => {
-      const manga: Manga = { ...draft, id: createId() };
+      const manga: Manga = { ...draft, id: createId(), mangadexId: null, latestChapter: null };
       mutate(
         (previous) => [manga, ...previous],
         (client, userId) => client.from("mangas").insert(mangaToRow(manga, userId)),
@@ -43,12 +49,62 @@ export function useMangaLibrary(): MangaLibrary {
       mutate(
         (previous) =>
           previous.map((manga) => (manga.id === id ? { ...manga, ...draft } : manga)),
+        /*
+         * Yalnızca formdaki alanlar yazılıyor, TÜM satır değil.
+         *
+         * mangaToRow ile tam satır yazılsaydı her düzenlemede mangadex_id ve
+         * latest_chapter null'a dönerdi — kullanıcı puanını değiştirdiği anda
+         * kurduğu katalog bağı sessizce kopardı.
+         */
         (client, userId) =>
           client
             .from("mangas")
-            .update(mangaToRow({ ...draft, id }, userId))
+            .update({
+              user_id: userId,
+              name: draft.name,
+              current_chapter: draft.currentChapter,
+              rating: draft.rating,
+              status: draft.status,
+              cover_url: draft.coverUrl,
+              updated_at: new Date().toISOString(),
+            })
             .eq("id", id),
         "Manga güncellenemedi",
+      );
+    },
+    [mutate],
+  );
+
+  /** Mangayı MangaDex kaydına bağlar; kapak yoksa katalogdakini kullanır. */
+  const linkCatalog = useCallback(
+    (id: string, mangadexId: string, latestChapter: number | null, coverUrl: string | null) => {
+      mutate(
+        (previous) =>
+          previous.map((manga) =>
+            manga.id === id
+              ? {
+                  ...manga,
+                  mangadexId,
+                  latestChapter,
+                  // Kullanıcının kendi kapağı varsa ezilmiyor
+                  coverUrl: manga.coverUrl ?? coverUrl,
+                }
+              : manga,
+          ),
+        (client, _userId, next) => {
+          const manga = next.find((item) => item.id === id);
+          if (!manga) return Promise.resolve({ error: null });
+          return client
+            .from("mangas")
+            .update({
+              mangadex_id: mangadexId,
+              latest_chapter: latestChapter,
+              latest_checked_at: new Date().toISOString(),
+              cover_url: manga.coverUrl,
+            })
+            .eq("id", id);
+        },
+        "Katalog bağlantısı kaydedilemedi",
       );
     },
     [mutate],
@@ -93,6 +149,7 @@ export function useMangaLibrary(): MangaLibrary {
     hydrated: collection.hydrated,
     error: collection.error,
     addManga,
+    linkCatalog,
     updateManga,
     removeManga,
     changeChapter,

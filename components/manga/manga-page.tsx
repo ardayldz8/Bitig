@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Library, Plus } from "lucide-react";
 import MangaCard from "@/components/manga/manga-card";
+import MatchDialog from "@/components/manga/match-dialog";
 import MangaDeleteDialog from "@/components/manga/manga-delete-dialog";
 import MangaFormModal from "@/components/manga/manga-form-modal";
 import MangaToolbar from "@/components/manga/manga-toolbar";
@@ -15,10 +16,11 @@ import type { Manga, MangaDraft, SortKey } from "@/types/manga";
 type DialogState =
   | { type: "none" }
   | { type: "form"; manga: Manga | null }
-  | { type: "delete"; manga: Manga };
+  | { type: "delete"; manga: Manga }
+  | { type: "match"; manga: Manga };
 
 export default function MangaPage() {
-  const { mangas, hydrated, addManga, updateManga, removeManga, changeChapter } =
+  const { mangas, hydrated, addManga, updateManga, removeManga, changeChapter, linkCatalog } =
     useMangaLibrary();
 
   const [query, setQuery] = useState("");
@@ -119,6 +121,7 @@ export default function MangaPage() {
                   manga={manga}
                   onEdit={(target) => setDialog({ type: "form", manga: target })}
                   onDelete={(target) => setDialog({ type: "delete", manga: target })}
+                  onMatch={(target) => setDialog({ type: "match", manga: target })}
                   onChangeChapter={changeChapter}
                 />
               </li>
@@ -151,6 +154,18 @@ export default function MangaPage() {
           manga={dialog.manga}
           onConfirm={handleDeleteConfirm}
           onCancel={closeDialog}
+        />
+      )}
+
+      {dialog.type === "match" && (
+        <MatchDialog
+          mangaName={dialog.manga.name}
+          currentChapter={dialog.manga.currentChapter}
+          onPick={(aday) => {
+            linkCatalog(dialog.manga.id, aday.id, aday.latestChapter, aday.coverUrl);
+            closeDialog();
+          }}
+          onClose={closeDialog}
         />
       )}
     </div>
