@@ -91,6 +91,21 @@ export function useCalorieTracker(): CalorieTracker {
             .from("food_entries")
             .insert(incoming.map((entry) => foodEntryToRow(entry, uid))),
         incoming.length > 1 ? "Kayıtlar eklenemedi" : "Kayıt eklenemedi",
+        /*
+         * Çevrimdışı kuyruk YALNIZCA tek kayıt eklerken devrede.
+         *
+         * Kuyruk satır satır çalışıyor; toplu ekleme (fotoğraf analizinden
+         * gelen beş kalem gibi) bölünürse yarısı gidip yarısı kalabilir ve
+         * kullanıcı hangisinin kaydolduğunu bilemez. Metroda öğün eklemek
+         * tek kayıtlı senaryo — asıl hedef o.
+         */
+        incoming.length === 1
+          ? {
+              table: "food_entries",
+              op: "insert" as const,
+              payload: foodEntryToRow(incoming[0], ""),
+            }
+          : undefined,
       );
     },
     [mutate],

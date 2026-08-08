@@ -7,6 +7,7 @@ import DailySummary from "@/components/calorie/daily-summary";
 import FoodEntryModal, { type EntryPrefill } from "@/components/calorie/food-entry-modal";
 import DescribeFood from "@/components/calorie/describe-food";
 import RecipePanel from "@/components/calorie/recipe-panel";
+import { useOfflineQueue } from "@/hooks/use-offline-queue";
 import FoodScanner from "@/components/calorie/food-scanner";
 import MacroProgress from "@/components/calorie/macro-progress";
 import MealSection from "@/components/calorie/meal-section";
@@ -31,6 +32,12 @@ type DialogState =
   | { type: "delete"; entry: FoodEntry };
 
 export default function CaloriePage() {
+  /*
+   * Çevrimdışıyken eklenen öğünler kuyrukta bekliyor. Sayaç yalnızca bekleyen
+   * varken görünüyor — sıfırken kalıcı bir gösterge, işe yaramayan gürültü.
+   */
+  const kuyruk = useOfflineQueue();
+
   const tracker = useCalorieTracker();
   const analysis = useFoodAnalysis();
   const dateInputId = useId();
@@ -201,6 +208,26 @@ export default function CaloriePage() {
 
   return (
     <div className="mx-auto min-h-dvh w-full max-w-[1100px] px-4 pt-8 pb-12 sm:px-6 sm:pt-10">
+      {/*
+        Bekleyen kayıt göstergesi. Yalnızca kuyrukta bir şey varken görünür —
+        sıfırken kalıcı bir rozet, işe yaramayan gürültü olurdu.
+      */}
+      {kuyruk.pending > 0 && (
+        <p className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-line bg-brand-soft px-4 py-3 text-sm text-ink">
+          <span className="min-w-0 flex-1">
+            {kuyruk.pending} kayıt gönderilmeyi bekliyor.
+          </span>
+          <button
+            type="button"
+            onClick={() => void kuyruk.flush()}
+            disabled={kuyruk.flushing}
+            className="min-h-9 shrink-0 rounded-lg bg-brand px-3 text-xs font-medium text-white disabled:opacity-50"
+          >
+            {kuyruk.flushing ? "Gönderiliyor…" : "Şimdi gönder"}
+          </button>
+        </p>
+      )}
+
       <header>
         {/* Marka alanı üstteki gezinme çubuğunda */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">

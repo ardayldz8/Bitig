@@ -9,6 +9,7 @@ import {
   CreditCard,
   Flame,
   FolderGit2,
+  ChartColumn,
   Home,
   Menu,
   NotebookPen,
@@ -23,6 +24,7 @@ const LINKS = [
   { href: "/repolar", label: "Repolar", Icon: FolderGit2 },
   { href: "/notlar", label: "Notlar", Icon: NotebookPen },
   { href: "/abonelikler", label: "Abonelikler", Icon: CreditCard },
+  { href: "/istatistik", label: "İstatistikler", Icon: ChartColumn },
 ] as const;
 
 /**

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
+import { enqueue, isQueueSupported } from "@/lib/offline/queue";
 import { useAuth } from "@/components/auth/auth-provider";
 import type { Row } from "@/lib/cloud/mappers";
 
@@ -33,7 +34,23 @@ export type CloudCollection<T> = {
       next: T[],
     ) => PromiseLike<PersistResult>,
     failMessage: string,
+    /**
+     * Çevrimdışı kuyruk için yazmanın TARİFİ.
+     *
+     * `persist` bir fonksiyon olduğu için içinden tablo/işlem çıkarılamıyor;
+     * kuyruğa yazabilmek çağıranın bunu açıkça söylemesini gerektiriyor.
+     * Verilmezse eski davranış sürüyor: ağ hatasında değişiklik geri alınır.
+     * Yarım bir kuyruk, "kaydedildi" deyip kaydetmemekten iyidir.
+     */
+    offline?: OfflineDescriptor,
   ) => void;
+};
+
+export type OfflineDescriptor = {
+  table: string;
+  op: "insert" | "update" | "delete";
+  payload: Record<string, unknown>;
+  matchId?: string;
 };
 
 /**
@@ -149,7 +166,7 @@ export function useCloudCollection<T>({
   }, [client, userId, table, reload, commit]);
 
   const mutate = useCallback<CloudCollection<T>["mutate"]>(
-    (optimistic, persist, failMessage) => {
+    (optimistic, persist, failMessage, offline) => {
       if (!client || !userId) {
         setError("Oturum bulunamadı, değişiklik kaydedilemedi.");
         return;
@@ -174,6 +191,38 @@ export function useCloudCollection<T>({
         })
         .catch((caught: unknown) => {
           if (!mountedRef.current) return;
+
+          /*
+           * Ağ hatasında değişiklik EKRANDA KALIYOR ve kuyruğa yazılıyor.
+           *
+           * Önce geri alınıyordu: metroda eklenen öğün gözünüzün önünde
+           * kayboluyordu. Ağ hatası ile veri hatası farklı şeyler —
+           * ikincisinde geri almak doğru, birincisinde kullanıcının emeğini
+           * silmek oluyor.
+           */
+          const agHatasi =
+            typeof navigator !== "undefined" &&
+            (!navigator.onLine || caught instanceof TypeError);
+
+          // Mesaj YALNIZCA gerçekten kuyruğa yazıldıysa gösteriliyor
+          if (agHatasi && offline && isQueueSupported()) {
+            void enqueue({
+              id: `${offline.table}-${offline.matchId ?? Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+              table: offline.table,
+              op: offline.op,
+              payload: offline.payload,
+              matchId: offline.matchId,
+            })
+              .then(() =>
+                setError("Bağlantı yok — değişiklik kaydedildi, bağlanınca gönderilecek."),
+              )
+              .catch(() => {
+                commit(snapshot);
+                setError("Bağlantı yok ve değişiklik yerel olarak da saklanamadı.");
+              });
+            return;
+          }
+
           commit(snapshot);
           setError(
             caught instanceof Error ? `${failMessage}: ${caught.message}` : failMessage,
