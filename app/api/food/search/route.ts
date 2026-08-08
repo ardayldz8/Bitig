@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { searchRequestSchema } from "@/lib/calorie/validation";
 import { configuredProviders } from "@/lib/nutrition/provider";
+import { searchCustomFoods } from "@/lib/nutrition/custom-foods";
 import { resolveNutritionDetailed } from "@/lib/nutrition/search-nutrition";
 import { checkRateLimit, clientKey } from "@/lib/rate-limit";
+import { createAdminClient, getUserId } from "@/lib/supabase/server";
 import type { ResolvedNutrition } from "@/types/calorie";
 
 export const runtime = "nodejs";
@@ -34,6 +36,14 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "İstek doğrulanamadı." }, { status: 400 });
   }
 
+  /*
+   * Kimlik OPSİYONEL: jeton yoksa kişisel besinler atlanır, dış kaynaklar
+   * yine çalışır. Zorunlu kılmak, bu ucun mevcut çağrılarını kırardı ve
+   * kazancı yoktu — dış kaynak araması kişiye özel değil.
+   */
+  const userId = await getUserId(request);
+  const admin = userId ? createAdminClient() : null;
+
   const available = configuredProviders();
   if (available.length === 0) {
     return NextResponse.json(
@@ -52,6 +62,36 @@ export async function POST(request: Request) {
 
   for (const item of parsed.data.items) {
     const queries = item.queries.length > 0 ? item.queries : [item.name];
+
+    /*
+     * ÖNCE kullanıcının kendi besinleri.
+     *
+     * Bir kez "simit 306 kcal" dendiyse bir daha hiçbir katalogda aranmasına
+     * gerek yok. Kendi tanımı her zaman kazanıyor: onu bilerek girdi ve genel
+     * bir veritabanı kaydından daha doğru olduğunu düşünüyor. Ayrıca dış
+     * isteği tamamen atlıyor — hız sınırı ve kesinti riski de yok.
+     */
+    const kendi =
+      admin && userId ? await searchCustomFoods(admin, userId, queries) : null;
+    if (kendi) {
+      matches.push({
+        name: item.name,
+        match: {
+          source: "custom",
+          foodId: kendi.id,
+          name: kendi.name,
+          brand: kendi.brand,
+          caloriesPer100: kendi.caloriesPer100,
+          proteinPer100: kendi.proteinPer100,
+          carbohydratesPer100: kendi.carbohydratesPer100,
+          fatPer100: kendi.fatPer100,
+          basis: kendi.basis,
+          servingGrams: kendi.servingGrams,
+        },
+      });
+      continue;
+    }
+
     const { result: found, unavailable } = await resolveNutritionDetailed({
       queries,
       brand: item.brand,

@@ -6,6 +6,7 @@ import AnalysisResult from "@/components/calorie/analysis-result";
 import DailySummary from "@/components/calorie/daily-summary";
 import FoodEntryModal, { type EntryPrefill } from "@/components/calorie/food-entry-modal";
 import DescribeFood from "@/components/calorie/describe-food";
+import CustomFoodsPanel from "@/components/calorie/custom-foods-panel";
 import RecipePanel from "@/components/calorie/recipe-panel";
 import { useOfflineQueue } from "@/hooks/use-offline-queue";
 import FoodScanner from "@/components/calorie/food-scanner";
@@ -320,8 +321,9 @@ export default function CaloriePage() {
             tarif ise kayıtlı ve tekrar kullanılan bir tanım.
           */}
           {analysis.stage !== "done" && (
-            <div className="mt-4">
+            <div className="mt-4 flex flex-wrap gap-2">
               <RecipePanel onAdd={(entry) => tracker.addEntries([entry])} />
+              <CustomFoodsPanel onAdd={(entry) => tracker.addEntries([entry])} />
             </div>
           )}
 

@@ -17,6 +17,12 @@ export type NutritionSource =
    * sağlıyor.
    */
   | "recipe"
+  /*
+   * Kullanıcının kendi tanımladığı besin. "manual" DEĞİL: manual her kayıtta
+   * yeniden elle girilen tahmin, bu ise bir kez tanımlanıp tekrar kullanılan
+   * kayıt. Ayrı tutulması, bir değerin nereden geldiğini izlenebilir kılıyor.
+   */
+  | "custom"
   | "nutrition_label"
   | "manual";
 
@@ -25,6 +31,7 @@ export const SOURCE_LABELS: Record<NutritionSource, string> = {
   open_food_facts: "Open Food Facts",
   usda: "USDA FoodData Central",
   recipe: "Kendi tarifim",
+  custom: "Kendi besinim",
   nutrition_label: "Besin etiketi",
   manual: "Manuel",
 };

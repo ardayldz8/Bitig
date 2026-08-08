@@ -18,6 +18,7 @@ const RESTORE_ORDER = [
   "media_entries",
   "food_entries",
   "nutrition_targets",
+  "custom_foods",
   // notes önce: note_reminders ona yabancı anahtarla bağlı
   "notes",
   "note_reminders",
@@ -37,6 +38,7 @@ const USER_SCOPED = new Set<string>([
   "media_entries",
   "food_entries",
   "nutrition_targets",
+  "custom_foods",
   "notes",
   "note_reminders",
   "subscriptions",

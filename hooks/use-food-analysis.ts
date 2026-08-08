@@ -1,5 +1,6 @@
 "use client";
 
+import { getBrowserClient } from "@/lib/supabase/client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { checkImageBeforeUpload, prepareImage } from "@/lib/calorie/image";
 import { buildRow, recalcRow, type DetectedItem } from "@/lib/calorie/rows";
@@ -88,9 +89,22 @@ export function useFoodAnalysis(): FoodAnalysis {
     ): Promise<{ matches: (ResolvedNutrition | null)[]; warning: string | null }> => {
       const bos = { matches: items.map(() => null), warning: null };
 
+      /*
+       * Oturum jetonu gönderiliyor: uç, kullanıcının KENDİ tanımladığı
+       * besinlere önce bakıyor. Jeton olmadan o adım atlanır ve doğrudan
+       * dış kaynaklara gidilir — yani jeton yoksa da çalışır, sadece
+       * kişisel tanımlar devreye girmez.
+       */
+      const client = getBrowserClient();
+      const { data: oturum } = (await client?.auth.getSession()) ?? { data: { session: null } };
+      const token = oturum.session?.access_token;
+
       const response = await fetch("/api/food/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ items }),
         signal,
       });
