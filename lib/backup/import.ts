@@ -22,6 +22,7 @@ const RESTORE_ORDER = [
   "notes",
   "note_reminders",
   "subscriptions",
+  "repo_triage",
   "projects",
   "project_features",
   "project_notes",
@@ -39,6 +40,7 @@ const USER_SCOPED = new Set<string>([
   "notes",
   "note_reminders",
   "subscriptions",
+  "repo_triage",
   "projects",
 ]);
 

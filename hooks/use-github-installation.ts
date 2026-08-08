@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import type { StorageMode } from "@/hooks/use-projects";
+/**
+ * Veri kaynağının durumu. Eskiden use-projects'te tanımlıydı; proje modülü
+ * kaldırılınca buraya taşındı — GitHub kurulumu artık repo envanteri
+ * tarafından kullanılıyor.
+ */
+export type StorageMode = "loading" | "local" | "needs_auth" | "cloud";
 
 export type GithubInstallation = {
   installationId: number;

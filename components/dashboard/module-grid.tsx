@@ -107,9 +107,9 @@ export default function ModuleGrid({ data }: { data: DashboardData }) {
 
         <li>
           <ModuleCard
-            href="/projeler"
+            href="/repolar"
             title="Projelerim"
-            description="Yazılım projelerini, özellikleri ve notlarını organize et."
+            description="GitHub repolarının durumu: aktif, duraklamış, bayat."
             Icon={Code2}
             tint={TINTS.projects}
             primary={projectFallback?.primary ?? (data.projects.state === "ok" ? data.projects.data.name : "")}

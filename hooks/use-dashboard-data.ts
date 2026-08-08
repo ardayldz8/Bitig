@@ -175,7 +175,12 @@ export function useDashboardData(): { data: DashboardData; loading: boolean } {
         };
       }, "Dizi / film bilgisi yüklenemedi");
 
-      // --- Projeler ---
+      // --- Repolar ---
+      /*
+       * Proje modülü kaldırıldı; kart artık repo envanterinden besleniyor.
+       * Ana sayfa GitHub'a istek ATMAZ — yalnızca son senkronun sonucunu
+       * okur, o da salt okunur bir kopyadır.
+       */
       const projects = await safe<{
         id: string;
         name: string;
@@ -186,73 +191,53 @@ export function useDashboardData(): { data: DashboardData; loading: boolean } {
       }>(async () => {
         const rows = unwrap(
           await supabase
-            .from("projects")
-            .select("id, name, status, updated_at")
+            .from("repo_snapshots")
+            .select("full_name, pushed_at, open_issues, open_prs, ci_conclusion")
             .eq("user_id", uid)
-            .order("updated_at", { ascending: false })
-            .limit(10),
+            .order("pushed_at", { ascending: false, nullsFirst: false })
+            .limit(20),
         );
 
-        const current =
-          rows.find((row) => row.status === "active") ?? rows[0] ?? null;
-        if (!current || typeof current.id !== "string" || typeof current.name !== "string") {
-          return { state: "empty" };
-        }
+        if (rows.length === 0) return { state: "empty" };
 
-        const updatedAt =
-          typeof current.updated_at === "string" ? current.updated_at : null;
+        // Kırık CI varsa o öne çıkar; yoksa en son dokunulan repo
+        const kirik = rows.find((row) => row.ci_conclusion === "failure");
+        const current = kirik ?? rows[0];
+        const fullName = typeof current.full_name === "string" ? current.full_name : null;
+        if (!fullName) return { state: "empty" };
 
-        // GitHub durumu senkronizasyonda kaydedilen tablolardan okunur.
-        // Ana sayfa GitHub'a istek ATMAZ; yalnızca son bilinen durumu gösterir.
-        const [runResult, issueResult] = await Promise.all([
-          supabase
-            .from("github_workflow_runs")
-            .select("status, conclusion")
-            .eq("project_id", current.id)
-            .order("started_at", { ascending: false })
-            .limit(1),
-          supabase
-            .from("github_issues")
-            .select("id", { count: "exact", head: true })
-            .eq("project_id", current.id)
-            .eq("state", "open"),
-        ]);
-
-        // Senkronize edilmemiş proje için hata değil, "bilinmiyor" doğru cevap
-        const lastRun = unwrap(runResult)[0] ?? null;
-        const ciStatus = lastRun
-          ? lastRun.status !== "completed"
-            ? ("pending" as const)
-            : lastRun.conclusion === "success"
-              ? ("success" as const)
-              : lastRun.conclusion === null
+        const updatedAt = typeof current.pushed_at === "string" ? current.pushed_at : null;
+        const ciStatus =
+          current.ci_conclusion === "success"
+            ? ("success" as const)
+            : current.ci_conclusion === "failure"
+              ? ("failure" as const)
+              : current.ci_conclusion === null
                 ? null
-                : ("failure" as const)
-          : null;
-
-        const openIssues = issueResult.error ? null : (issueResult.count ?? null);
+                : ("pending" as const);
 
         recent.push({
-          id: `project-${current.id}`,
+          id: `repo-${fullName}`,
           module: "projects",
-          title: current.name,
-          subtitle: "Son güncelleme yapıldı",
-          href: `/projeler?project=${encodeURIComponent(current.id)}`,
+          title: fullName,
+          subtitle: kirik ? "CI kırık" : "Son dokunulan repo",
+          href: "/repolar",
           updatedAt,
         });
 
         return {
           state: "ok",
           data: {
-            id: current.id,
-            name: current.name,
-            status: typeof current.status === "string" ? current.status : "active",
+            id: fullName,
+            name: fullName,
+            status: "active",
             updatedAt,
             ciStatus,
-            openIssues,
+            openIssues:
+              typeof current.open_issues === "number" ? current.open_issues : null,
           },
         };
-      }, "Proje bilgisi şu anda kullanılamıyor");
+      }, "Repo bilgisi şu anda kullanılamıyor");
 
       if (cancelled) return;
 

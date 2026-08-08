@@ -26,14 +26,14 @@ export async function GET(request: Request) {
     return redirectWithError("missing_installation");
   }
 
-  const redirect = new URL("/projeler", env.appUrl());
+  const redirect = new URL("/repolar", env.appUrl());
   redirect.searchParams.set("github", "connected");
   redirect.searchParams.set("installation_id", String(installationId));
   return NextResponse.redirect(redirect.toString());
 }
 
 function redirectWithError(code: string) {
-  const redirect = new URL("/projeler", env.appUrl());
+  const redirect = new URL("/repolar", env.appUrl());
   redirect.searchParams.set("github", "error");
   redirect.searchParams.set("reason", code);
   return NextResponse.redirect(redirect.toString());

@@ -55,7 +55,7 @@ export default function AuthScreen() {
           </span>
           <div>
             <h1 className="text-xl font-bold tracking-tight text-ink">Bitig</h1>
-            <p className="text-sm text-ink-soft">Manga, kalori, dizi/film ve projeler</p>
+            <p className="text-sm text-ink-soft">Manga, kalori, dizi/film ve daha fazlası</p>
           </div>
         </div>
 

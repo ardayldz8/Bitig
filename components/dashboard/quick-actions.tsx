@@ -14,7 +14,7 @@ const ACTIONS: {
     Icon: Clapperboard,
     tint: "text-amber-600",
   },
-  { href: "/projeler?action=add", label: "Proje ekle", Icon: Code2, tint: "text-sky-600" },
+  { href: "/repolar", label: "Repolar", Icon: Code2, tint: "text-sky-600" },
   {
     href: "/kalori?action=scan",
     label: "Yemek tara",

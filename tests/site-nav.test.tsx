@@ -37,7 +37,7 @@ describe("gezinme menüsü", () => {
 
     // Alt sekme çubuğu yediyi sığdıramadığı için açılır menüye geçildi
     expect(screen.getAllByRole("menuitem")).toHaveLength(7);
-    for (const ad of ["Ana Sayfa", "Manga", "Kalori", "Dizi / Film", "Projeler", "Notlar", "Abonelikler"]) {
+    for (const ad of ["Ana Sayfa", "Manga", "Kalori", "Dizi / Film", "Repolar", "Notlar", "Abonelikler"]) {
       expect(screen.getByRole("menuitem", { name: ad })).toBeInTheDocument();
     }
   });

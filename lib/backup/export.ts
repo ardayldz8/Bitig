@@ -34,11 +34,15 @@ const USER_TABLES = [
   "notes",
   "note_reminders",
   "subscriptions",
+  "repo_triage",
   "projects",
   "github_installations",
 ] as const;
 
 /*
+ * `repo_snapshots` yok: GitHub'dan çekilen salt okunur kopya, tek tuşla
+ * yeniden üretiliyor. `repo_triage` VAR — o kişisel karar, başka yerde yok.
+ *
  * `subscription_notices` de yok: hangi ödeme için hangi bildirimin
  * gönderildiğini tutan işletim kaydı, kullanıcı verisi değil. Geri
  * yüklendiğinde tek etkisi geçmiş bildirimlerin tekrarlanmaması olurdu —

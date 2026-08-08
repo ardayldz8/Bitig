@@ -20,7 +20,7 @@ const LINKS = [
   { href: "/manga", label: "Manga", Icon: BookOpen },
   { href: "/kalori", label: "Kalori", Icon: Flame },
   { href: "/dizi-film", label: "Dizi / Film", Icon: Clapperboard },
-  { href: "/projeler", label: "Projeler", Icon: FolderGit2 },
+  { href: "/repolar", label: "Repolar", Icon: FolderGit2 },
   { href: "/notlar", label: "Notlar", Icon: NotebookPen },
   { href: "/abonelikler", label: "Abonelikler", Icon: CreditCard },
 ] as const;
