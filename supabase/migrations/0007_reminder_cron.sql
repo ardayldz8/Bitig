@@ -161,3 +161,58 @@ select cron.schedule(
   '15 3 * * 0',
   $$select public.dispatch_weekly_backup()$$
 );
+
+-- ------------------------------------------------------ Haftalık repo özeti
+
+create or replace function public.dispatch_repo_digest()
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  site_url text;
+  gizli    text;
+begin
+  select decrypted_secret into site_url
+  from vault.decrypted_secrets where name = 'bitig_site_url';
+
+  select decrypted_secret into gizli
+  from vault.decrypted_secrets where name = 'bitig_dispatch_secret';
+
+  if site_url is null or gizli is null then
+    raise warning 'Bitig: repo özeti sırları Vault''ta yok, atlandı';
+    return;
+  end if;
+
+  perform net.http_post(
+    url     := site_url || '/api/repos/digest',
+    body    := '{}'::jsonb,
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'x-dispatch-secret', gizli
+    ),
+    timeout_milliseconds := 30000
+  );
+end;
+$$;
+
+revoke all on function public.dispatch_repo_digest() from public, anon, authenticated;
+
+do $$
+begin
+  if exists (select 1 from cron.job where jobname = 'bitig-repo-ozeti') then
+    perform cron.unschedule('bitig-repo-ozeti');
+  end if;
+end $$;
+
+/*
+ * Pazar 06:00 UTC (Türkiye'de 09:00) — haftalık yedekten (03:15) sonra.
+ * Yedekle aynı dakikaya konmadı: ikisi de aynı Netlify fonksiyonunu soğuk
+ * başlatırsa gereksiz yarış olur.
+ */
+select cron.schedule(
+  'bitig-repo-ozeti',
+  '0 6 * * 0',
+  $$select public.dispatch_repo_digest()$$
+);

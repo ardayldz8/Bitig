@@ -6,8 +6,8 @@ import {
   SIGNATURE_HEADER,
   verifyWebhookSignature,
 } from "@/lib/github/webhook";
-import { buildWebhookUpdate } from "@/lib/github/webhook-types";
 import { isSupportedWebhookEvent } from "@/types/github";
+import { applyWebhookToInventory } from "@/lib/repos/webhook-apply";
 import { createAdminClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -72,34 +72,16 @@ export async function POST(request: Request) {
     }
   }
 
-  // Payload'dan yalnızca gerekli alanlar normalize edilir
-  const update = buildWebhookUpdate(event, payload);
-  if (!update) {
-    return NextResponse.json({ ok: true, ignored: "unmapped" });
-  }
-
-  if (admin && update.repositoryFullName) {
-    const { data: project } = await admin
-      .from("projects")
-      .select("id")
-      .eq("github_full_name", update.repositoryFullName)
-      .limit(1)
-      .maybeSingle();
-
-    if (project?.id) {
-      // Aktivite kaydı → Supabase Realtime bunu açık sayfalara yayar
-      await admin.from("project_activities").insert({
-        project_id: project.id,
-        source: "github",
-        type: update.activityType,
-        title: update.title,
-        description: update.description,
-        external_url: update.externalUrl,
-        occurred_at: update.occurredAt,
-      });
-
-      await update.persist?.(admin, project.id);
-    }
+  /*
+   * Envanter güncellenir ve gerekiyorsa bildirim gönderilir.
+   *
+   * Eskiden burada `projects` tablosunda eşleşen proje aranıp aktivite
+   * kaydı yazılıyordu. Proje modülü kaldırıldı; artık doğrudan
+   * repo_snapshots güncelleniyor — webhook'un tek işi envanteri taze
+   * tutmak ve CI kırıldığında haber vermek.
+   */
+  if (admin) {
+    await applyWebhookToInventory(admin, event, payload);
   }
 
   return NextResponse.json({ ok: true });
