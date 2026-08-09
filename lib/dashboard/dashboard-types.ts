@@ -1,4 +1,4 @@
-export type DashboardModule = "manga" | "calorie" | "media" | "projects";
+export type DashboardModule = "manga" | "media" | "projects";
 
 export type DashboardRecentItem = {
   id: string;
@@ -45,7 +45,6 @@ export type ProjectSummary = {
 
 export type DashboardData = {
   manga: ModuleResult<MangaSummary>;
-  calorie: ModuleResult<CalorieSummary>;
   media: ModuleResult<MediaSummary>;
   projects: ModuleResult<ProjectSummary>;
   recentItems: DashboardRecentItem[];

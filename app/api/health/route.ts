@@ -1,11 +1,11 @@
 import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
-  FOOD_TEXT_JSON_SCHEMA,
-  FOOD_TEXT_SYSTEM_PROMPT,
-  foodTextResultSchema,
-} from "@/lib/ai/food-text-schema";
-import { AI_SECURITY_PREAMBLE, wrapUntrusted } from "@/lib/ai/security";
+  RECOMMEND_JSON_SCHEMA,
+  buildRecommendPrompt,
+  recommendationResultSchema,
+} from "@/lib/ai/recommend-schema";
+import { AI_SECURITY_PREAMBLE } from "@/lib/ai/security";
 import {
   env,
   githubAppStatus,
@@ -81,27 +81,26 @@ export async function GET(request: Request) {
         "Content-Type": "application/json",
       },
       /*
-       * GERÇEK yolun aynısı: yapılandırılmış çıktı + aynı şema + aynı prompt.
-       * Basit bir "OK yaz" isteği canlıda sorunsuz geçiyordu ama kullanıcının
-       * yaşadığı hata bu yolda değildi — teşhis, hata veren çağrının kendisini
-       * taklit etmeli.
+       * GERÇEK bir yolun aynısı: yapılandırılmış çıktı + gerçek şema + gerçek
+       * prompt. Basit bir "OK yaz" isteği canlıda sorunsuz geçiyordu ama
+       * kullanıcının yaşadığı hata o yolda değildi — teşhis, hata verebilecek
+       * çağrının kendisini taklit etmeli. Kalori modülü kaldırılınca örnek
+       * çağrı öneri şemasına geçti.
        */
       body: JSON.stringify({
         model,
         temperature: 0.2,
         max_tokens: 2500,
         messages: [
-          { role: "system", content: `${AI_SECURITY_PREAMBLE}
-
-${FOOD_TEXT_SYSTEM_PROMPT}` },
           {
-            role: "user",
-            content: `${wrapUntrusted("kullanici_metni", "az önce tost yedim")}
+            role: "system",
+            content: `${AI_SECURITY_PREAMBLE}
 
-Bu metinden yiyecekleri çıkar.`,
+${buildRecommendPrompt("manga")}`,
           },
+          { role: "user", content: "<kutuphane>\n- Berserk (puan: 10/10)\n</kutuphane>" },
         ],
-        response_format: { type: "json_schema", json_schema: FOOD_TEXT_JSON_SCHEMA },
+        response_format: { type: "json_schema", json_schema: RECOMMEND_JSON_SCHEMA },
       }),
       signal: AbortSignal.timeout(20_000),
     });
@@ -115,7 +114,7 @@ Bu metinden yiyecekleri çıkar.`,
         choices?: { message?: { content?: string }; finish_reason?: string }[];
       };
       const icerik = payload.choices?.[0]?.message?.content;
-      const parsed = icerik ? foodTextResultSchema.safeParse(JSON.parse(icerik)) : null;
+      const parsed = icerik ? recommendationResultSchema.safeParse(JSON.parse(icerik)) : null;
       ai = {
         model,
         status: 200,
@@ -123,7 +122,7 @@ Bu metinden yiyecekleri çıkar.`,
         finish: payload.choices?.[0]?.finish_reason ?? null,
         contentLength: icerik?.length ?? 0,
         schemaOk: parsed?.success ?? false,
-        items: parsed?.success ? parsed.data.items.length : null,
+        items: parsed?.success ? parsed.data.suggestions.length : null,
         schemaError: parsed && !parsed.success ? JSON.stringify(parsed.error.issues[0]).slice(0, 200) : null,
       };
     }

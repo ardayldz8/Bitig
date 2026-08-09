@@ -9,8 +9,6 @@ import { parseBackup, restoreBackup, type BackupSummary } from "@/lib/backup/imp
 const TABLO_ADLARI: Record<string, string> = {
   mangas: "Manga",
   media_entries: "Dizi / Film",
-  food_entries: "Yemek kaydı",
-  nutrition_targets: "Beslenme hedefi",
   projects: "Proje",
   project_features: "Özellik",
   project_notes: "Not",
@@ -147,7 +145,7 @@ export default function DataBackup() {
         <div className="min-w-0 flex-1">
           <h2 className="font-semibold text-ink">Verilerini yedekle</h2>
           <p className="mt-1 text-sm text-ink-soft">
-            Manga, kalori, dizi/film ve proje kayıtlarının tamamını tek bir JSON
+            Manga, dizi/film, notlar ve abonelik kayıtlarının tamamını tek bir JSON
             dosyası olarak indirir. Dosya cihazında işlenir, hiçbir yere gönderilmez.
           </p>
 

@@ -6,7 +6,7 @@ export default function manifest(): MetadataRoute.Manifest {
     name: "Bitig — Kişisel Takip",
     short_name: "Bitig",
     description:
-      "Manga, kalori, dizi/film, notlar ve abonelikleri tek yerden takip et.",
+      "Manga, dizi/film, repolar, notlar ve abonelikleri tek yerden takip et.",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -28,7 +28,6 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       { name: "Manga Takibi", short_name: "Manga", url: "/manga" },
-      { name: "Kalori Takibi", short_name: "Kalori", url: "/kalori" },
       { name: "Dizi / Film", short_name: "Dizi", url: "/dizi-film" },
       { name: "Repolarım", short_name: "Repolar", url: "/repolar" },
     ],

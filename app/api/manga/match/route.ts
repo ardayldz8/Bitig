@@ -48,7 +48,7 @@ Yalnızca arama metinleri döndür, açıklama yazma.`;
  *
  * İki aşama: AI adı aranabilir hâle çevirir, katalog gerçek kayıtları döner.
  * AI hiçbir zaman "bu eser şudur" demiyor — yalnızca arama metni üretiyor,
- * eşleştirmeyi kullanıcı onaylıyor. Besin değerlerindeki desenin aynısı.
+ * eşleştirmeyi kullanıcı onaylıyor.
  */
 export async function POST(request: Request) {
   const limit = checkRateLimit(clientKey(request, "manga-match"), 40, 300_000);

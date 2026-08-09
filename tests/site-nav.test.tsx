@@ -29,15 +29,15 @@ describe("gezinme menüsü", () => {
     expect(screen.getByRole("button", { name: /menüyü aç/i })).toBeInTheDocument();
   });
 
-  it("açılınca sekiz sayfanın hepsi listelenir", async () => {
+  it("açılınca yedi sayfanın hepsi listelenir", async () => {
     const user = userEvent.setup();
     render(<SiteNav />);
 
     await user.click(screen.getByRole("button", { name: /menüyü aç/i }));
 
     // Alt sekme çubuğu bu kadarını sığdıramadığı için açılır menüye geçildi
-    expect(screen.getAllByRole("menuitem")).toHaveLength(8);
-    for (const ad of ["Ana Sayfa", "Manga", "Kalori", "Dizi / Film", "Repolar", "Notlar", "Abonelikler", "İstatistikler"]) {
+    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
+    for (const ad of ["Ana Sayfa", "Manga", "Dizi / Film", "Repolar", "Notlar", "Abonelikler", "İstatistikler"]) {
       expect(screen.getByRole("menuitem", { name: ad })).toBeInTheDocument();
     }
   });
@@ -74,7 +74,7 @@ describe("gezinme menüsü", () => {
     render(<SiteNav />);
 
     await user.click(screen.getByRole("button", { name: /menüyü aç/i }));
-    expect(screen.getAllByRole("menuitem")).toHaveLength(8);
+    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();

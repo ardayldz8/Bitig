@@ -16,7 +16,6 @@ import {
 function summarize(counts: LocalCounts): string {
   const parts: string[] = [];
   if (counts.mangas > 0) parts.push(`${counts.mangas} manga`);
-  if (counts.foodEntries > 0) parts.push(`${counts.foodEntries} yemek kaydı`);
   if (counts.mediaEntries > 0) parts.push(`${counts.mediaEntries} dizi/film`);
   return parts.join(", ");
 }
@@ -24,7 +23,7 @@ function summarize(counts: LocalCounts): string {
 /**
  * Bu cihazda kalmış eski verileri hesaba taşıma teklifi.
  *
- * Buluta geçişten önce kaydedilen manga/kalori/dizi verileri yalnızca
+ * Buluta geçişten önce kaydedilen manga/dizi verileri yalnızca
  * tarayıcıda duruyor. Taşınmazsa erişilemez hâle gelirler, o yüzden sessizce
  * yok saymak yerine bir kez açıkça soruluyor.
  */

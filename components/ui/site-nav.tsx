@@ -7,7 +7,6 @@ import {
   BookOpen,
   Clapperboard,
   CreditCard,
-  Flame,
   FolderGit2,
   ChartColumn,
   Home,
@@ -19,7 +18,6 @@ import {
 const LINKS = [
   { href: "/", label: "Ana Sayfa", Icon: Home },
   { href: "/manga", label: "Manga", Icon: BookOpen },
-  { href: "/kalori", label: "Kalori", Icon: Flame },
   { href: "/dizi-film", label: "Dizi / Film", Icon: Clapperboard },
   { href: "/repolar", label: "Repolar", Icon: FolderGit2 },
   { href: "/notlar", label: "Notlar", Icon: NotebookPen },

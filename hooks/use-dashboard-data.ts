@@ -3,9 +3,7 @@
 import { useEffect, useState } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { useAuth } from "@/components/auth/auth-provider";
-import { rowToManga, rowToMediaEntry, rowToFoodEntry, rowToTargets, type Row } from "@/lib/cloud/mappers";
-import { dateKey, entriesForDate, sumTotals } from "@/lib/calorie/totals";
-import { defaultTargets } from "@/types/calorie";
+import { rowToManga, rowToMediaEntry, type Row } from "@/lib/cloud/mappers";
 import type {
   DashboardData,
   DashboardRecentItem,
@@ -14,7 +12,6 @@ import type {
 
 const EMPTY: DashboardData = {
   manga: { state: "empty" },
-  calorie: { state: "empty" },
   media: { state: "empty" },
   projects: { state: "empty" },
   recentItems: [],
@@ -90,42 +87,6 @@ export function useDashboardData(): { data: DashboardData; loading: boolean } {
           data: { title: current.name, currentChapter: current.currentChapter },
         };
       }, "Manga bilgisi yüklenemedi");
-
-      // --- Kalori ---
-      const calorie = await safe<{ consumed: number; target: number }>(async () => {
-        const today = dateKey(new Date());
-
-        // Gün sınırı kullanıcının saat dilimine göre; sorguyu geniş tutup
-        // filtrelemeyi mevcut yardımcıya bırakmak sapma üretmez.
-        const dayStart = new Date(`${today}T00:00:00`);
-        const dayEnd = new Date(dayStart.getTime() + 36 * 60 * 60 * 1000);
-
-        const [entryResult, targetResult] = await Promise.all([
-          supabase
-            .from("food_entries")
-            .select("*")
-            .eq("user_id", uid)
-            .gte("consumed_at", new Date(dayStart.getTime() - 12 * 60 * 60 * 1000).toISOString())
-            .lte("consumed_at", dayEnd.toISOString()),
-          supabase.from("nutrition_targets").select("*").eq("user_id", uid).maybeSingle(),
-        ]);
-
-        const entries = unwrap(entryResult)
-          .map(rowToFoodEntry)
-          .filter((entry) => entry !== null);
-        const todays = entriesForDate(entries, today);
-        if (todays.length === 0) return { state: "empty" };
-
-        if (targetResult.error) throw new Error(targetResult.error.message);
-        const targets = targetResult.data
-          ? (rowToTargets(targetResult.data as Row) ?? defaultTargets)
-          : defaultTargets;
-
-        return {
-          state: "ok",
-          data: { consumed: sumTotals(todays).calories, target: targets.calories },
-        };
-      }, "Bugünkü kalori bilgisi alınamadı");
 
       // --- Dizi / Film ---
       const media = await safe<{
@@ -251,7 +212,7 @@ export function useDashboardData(): { data: DashboardData; loading: boolean } {
         })
         .slice(0, 3);
 
-      setData({ manga, calorie, media, projects, recentItems });
+      setData({ manga, media, projects, recentItems });
       setLoading(false);
     }
 

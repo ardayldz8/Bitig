@@ -1,17 +1,12 @@
 "use client";
 
-import { BookOpen, Clapperboard, Code2, UtensilsCrossed } from "lucide-react";
+import { BookOpen, Clapperboard, Code2 } from "lucide-react";
 import ModuleCard from "@/components/dashboard/module-card";
-import {
-  formatInteger,
-  progressRatio,
-  relativeDayLabel,
-} from "@/lib/dashboard/dashboard-utils";
+import { relativeDayLabel } from "@/lib/dashboard/dashboard-utils";
 import type { DashboardData, ModuleResult } from "@/lib/dashboard/dashboard-types";
 
 const TINTS = {
   manga: { bg: "bg-brand-soft", text: "text-brand", bar: "bg-brand" },
-  calorie: { bg: "bg-emerald-50", text: "text-emerald-600", bar: "bg-emerald-500" },
   media: { bg: "bg-amber-50", text: "text-amber-600", bar: "bg-amber-500" },
   projects: { bg: "bg-sky-50", text: "text-sky-600", bar: "bg-sky-500" },
 } as const;
@@ -30,12 +25,8 @@ function fallbackText<T>(
 
 export default function ModuleGrid({ data }: { data: DashboardData }) {
   const mangaFallback = fallbackText(data.manga, "Henüz devam eden manga yok");
-  const calorieFallback = fallbackText(data.calorie, "Bugün henüz kayıt eklenmedi");
   const mediaFallback = fallbackText(data.media, "Henüz yapım eklenmedi");
   const projectFallback = fallbackText(data.projects, "Proje bilgisi için giriş yap");
-
-  const calorie = data.calorie.state === "ok" ? data.calorie.data : null;
-  const calorieOver = calorie !== null && calorie.consumed > calorie.target;
 
   return (
     <section aria-label="Modüller">
@@ -57,30 +48,6 @@ export default function ModuleGrid({ data }: { data: DashboardData }) {
             }
             // Toplam bölüm bilgisi tutulmadığı için yüzde üretilmez
             ratio={null}
-          />
-        </li>
-
-        <li>
-          <ModuleCard
-            href="/kalori"
-            title="Kalori Takibi"
-            description="Günlük beslenmeni takip et, hedeflerine ulaş."
-            Icon={UtensilsCrossed}
-            tint={TINTS.calorie}
-            primary={calorieFallback?.primary ?? "Bugünkü alım"}
-            secondary={
-              calorie
-                ? `${formatInteger(calorie.consumed)} / ${formatInteger(calorie.target)} kcal`
-                : null
-            }
-            ratio={calorie ? progressRatio(calorie.consumed, calorie.target) : null}
-            progressLabel={
-              calorie
-                ? calorieOver
-                  ? `Günlük hedef ${formatInteger(calorie.consumed - calorie.target)} kcal aşıldı`
-                  : `${formatInteger(calorie.consumed)} / ${formatInteger(calorie.target)} kilokalori`
-                : undefined
-            }
           />
         </li>
 
@@ -136,12 +103,6 @@ export default function ModuleGrid({ data }: { data: DashboardData }) {
         </li>
       </ul>
 
-      {calorieOver && calorie && (
-        <p className="mt-3 text-sm text-danger">
-          Günlük kalori hedefin {formatInteger(calorie.consumed - calorie.target)} kcal
-          aşıldı.
-        </p>
-      )}
     </section>
   );
 }

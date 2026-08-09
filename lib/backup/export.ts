@@ -29,9 +29,6 @@ export type Backup = {
 const USER_TABLES = [
   "mangas",
   "media_entries",
-  "food_entries",
-  "nutrition_targets",
-  "custom_foods",
   "notes",
   "note_reminders",
   "subscriptions",

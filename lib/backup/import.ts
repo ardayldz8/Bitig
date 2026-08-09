@@ -16,9 +16,6 @@ import { BACKUP_VERSION, type Backup } from "@/lib/backup/export";
 const RESTORE_ORDER = [
   "mangas",
   "media_entries",
-  "food_entries",
-  "nutrition_targets",
-  "custom_foods",
   // notes önce: note_reminders ona yabancı anahtarla bağlı
   "notes",
   "note_reminders",
@@ -36,9 +33,6 @@ const RESTORE_ORDER = [
 const USER_SCOPED = new Set<string>([
   "mangas",
   "media_entries",
-  "food_entries",
-  "nutrition_targets",
-  "custom_foods",
   "notes",
   "note_reminders",
   "subscriptions",

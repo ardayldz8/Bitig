@@ -6,7 +6,7 @@ import QuickActions from "@/components/dashboard/quick-actions";
 
 export const metadata: Metadata = {
   title: { absolute: "Bitig" },
-  description: "Manga, kalori, dizi/film ve proje takibin tek yerde.",
+  description: "Manga, dizi/film, repolar, notlar ve abonelikler tek yerde.",
 };
 
 /** Sunucu bileşeni; veri gerektiren bölümler ayrı istemci bileşenlerinde. */

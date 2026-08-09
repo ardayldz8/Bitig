@@ -19,7 +19,7 @@ export const metadata: Metadata = {
     default: "Bitig",
     template: "%s — Bitig",
   },
-  description: "Manga, kalori, dizi/film, notlar ve abonelikleri tek yerden takip et.",
+  description: "Manga, dizi/film, repolar, notlar ve abonelikleri tek yerden takip et.",
   applicationName: "Bitig",
   manifest: "/manifest.webmanifest",
   icons: {
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "Bitig",
-    description: "Manga, kalori, dizi/film, notlar ve abonelikleri tek yerden takip et.",
+    description: "Manga, dizi/film, repolar, notlar ve abonelikleri tek yerden takip et.",
     images: ["/og-image.png"],
     type: "website",
     locale: "tr_TR",

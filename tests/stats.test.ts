@@ -1,34 +1,6 @@
 import { describe, expect, it } from "vitest";
-import {
-  averageCalories,
-  currentStreak,
-  mediaSummary,
-  trackedDays,
-  weeklyReadingPace,
-  yearlySpend,
-} from "@/lib/stats/compute";
+import { mediaSummary, weeklyReadingPace, yearlySpend } from "@/lib/stats/compute";
 
-describe("kalori ortalaması", () => {
-  it("kayıt girilmemiş günü sıfır saymaz", () => {
-    /*
-     * Sıfır saymak, unuttuğunuz günü "hiç yemedim" gibi gösterip ortalamayı
-     * sahte biçimde düşürürdü — hem de tam takibi bıraktığınız günlerde.
-     */
-    const gunler = [
-      { date: "2026-08-01", calories: 2000 },
-      { date: "2026-08-02", calories: 0 },
-      { date: "2026-08-03", calories: 2400 },
-    ];
-
-    expect(averageCalories(gunler)).toBe(2200);
-    expect(trackedDays(gunler)).toBe(2);
-  });
-
-  it("hiç kayıt yoksa null — sıfır göstermez", () => {
-    expect(averageCalories([{ date: "2026-08-01", calories: 0 }])).toBeNull();
-    expect(averageCalories([])).toBeNull();
-  });
-});
 
 describe("okuma hızı", () => {
   const now = new Date("2026-08-08T12:00:00Z");
@@ -118,35 +90,3 @@ describe("medya özeti", () => {
   });
 });
 
-describe("kayıt serisi", () => {
-  const gun = (tarih: string, kalori = 2000) => ({ date: tarih, calories: kalori });
-
-  it("ardışık günleri sayar", () => {
-    const seri = currentStreak(
-      [gun("2026-08-08"), gun("2026-08-07"), gun("2026-08-06")],
-      "2026-08-08",
-    );
-    expect(seri).toBe(3);
-  });
-
-  it("bugün boşsa seriyi bozmaz — gün henüz bitmedi", () => {
-    /*
-     * Sabah 09:00'da henüz bir şey girilmemiş olması, dünkü seriyi
-     * sıfırlamak için sebep değil.
-     */
-    const seri = currentStreak([gun("2026-08-07"), gun("2026-08-06")], "2026-08-08");
-    expect(seri).toBe(2);
-  });
-
-  it("araya boş gün girince durur", () => {
-    const seri = currentStreak(
-      [gun("2026-08-08"), gun("2026-08-07"), gun("2026-08-05")],
-      "2026-08-08",
-    );
-    expect(seri).toBe(2);
-  });
-
-  it("hiç kayıt yoksa sıfır", () => {
-    expect(currentStreak([], "2026-08-08")).toBe(0);
-  });
-});

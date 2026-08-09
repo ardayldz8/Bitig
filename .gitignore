@@ -23,3 +23,6 @@ yarn-error.log*
 
 # Kurulum sirasinda uretilen, gizli deger iceren gecici dosyalar
 kurulum-gecici/
+
+# Kalori modülü kaldırılırken alınan veri yedeği
+kalori-yedek/

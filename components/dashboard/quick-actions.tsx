@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Camera, Clapperboard, Code2, Plus, Zap, type LucideIcon } from "lucide-react";
+import { Clapperboard, Code2, Plus, Zap, type LucideIcon } from "lucide-react";
 
 const ACTIONS: {
   href: string;
@@ -15,12 +15,6 @@ const ACTIONS: {
     tint: "text-amber-600",
   },
   { href: "/repolar", label: "Repolar", Icon: Code2, tint: "text-sky-600" },
-  {
-    href: "/kalori?action=scan",
-    label: "Yemek tara",
-    Icon: Camera,
-    tint: "text-emerald-600",
-  },
 ];
 
 /** Sunucu bileşeni — sadece bağlantılar, istemci mantığı yok. */

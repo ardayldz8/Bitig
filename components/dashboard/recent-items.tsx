@@ -7,7 +7,6 @@ import {
   Clapperboard,
   Clock,
   Code2,
-  UtensilsCrossed,
   type LucideIcon,
 } from "lucide-react";
 import { formatUpdatedAt } from "@/lib/dashboard/dashboard-utils";
@@ -18,14 +17,12 @@ import type {
 
 const MODULE_ICON: Record<DashboardModule, LucideIcon> = {
   manga: BookOpen,
-  calorie: UtensilsCrossed,
   media: Clapperboard,
   projects: Code2,
 };
 
 const MODULE_TINT: Record<DashboardModule, string> = {
   manga: "bg-brand-soft text-brand",
-  calorie: "bg-emerald-50 text-emerald-600",
   media: "bg-amber-50 text-amber-600",
   projects: "bg-sky-50 text-sky-600",
 };

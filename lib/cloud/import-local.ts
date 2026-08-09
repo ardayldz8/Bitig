@@ -1,12 +1,10 @@
 "use client";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { foodEntryToRow, mangaToRow, mediaEntryToRow, targetsToRow } from "@/lib/cloud/mappers";
+import { mangaToRow, mediaEntryToRow, } from "@/lib/cloud/mappers";
 import { createId } from "@/lib/ids";
-import { readEntries, readTargets } from "@/lib/calorie/storage";
 import { readMediaEntries } from "@/lib/media/storage";
 import { readStoredMangas } from "@/lib/storage";
-import { defaultTargets, type NutritionTargets } from "@/types/calorie";
 
 /**
  * Bu cihazda kalmış eski veriler.
@@ -24,14 +22,11 @@ const DISMISSED_KEY = "bitig.import.dismissed.v1";
 
 export type LocalSnapshot = {
   mangas: ReturnType<typeof readStoredMangas>;
-  foodEntries: ReturnType<typeof readEntries>;
-  targets: NutritionTargets;
   mediaEntries: ReturnType<typeof readMediaEntries>;
 };
 
 export type LocalCounts = {
   mangas: number;
-  foodEntries: number;
   mediaEntries: number;
   total: number;
 };
@@ -48,22 +43,18 @@ function safeRead<T>(read: () => T, fallback: T): T {
 export function readLocalSnapshot(): LocalSnapshot {
   return {
     mangas: safeRead(readStoredMangas, null),
-    foodEntries: safeRead(readEntries, []),
-    targets: safeRead(readTargets, defaultTargets),
     mediaEntries: safeRead(readMediaEntries, null),
   };
 }
 
 export function countLocal(snapshot: LocalSnapshot): LocalCounts {
   const mangas = snapshot.mangas?.length ?? 0;
-  const foodEntries = snapshot.foodEntries.length;
   const mediaEntries = snapshot.mediaEntries?.length ?? 0;
 
   return {
     mangas,
-    foodEntries,
     mediaEntries,
-    total: mangas + foodEntries + mediaEntries,
+    total: mangas + mediaEntries,
   };
 }
 
@@ -90,8 +81,6 @@ function clearLocalKeys(): void {
   if (typeof window === "undefined") return;
   for (const key of [
     "bitig.mangas.v1",
-    "bitig.calorie.entries.v1",
-    "bitig.calorie.targets.v1",
     "bitig.media.entries.v1",
   ]) {
     try {
@@ -134,7 +123,7 @@ export async function importLocalData(
   userId: string,
   snapshot: LocalSnapshot,
 ): Promise<ImportResult> {
-  const imported: LocalCounts = { mangas: 0, foodEntries: 0, mediaEntries: 0, total: 0 };
+  const imported: LocalCounts = { mangas: 0, mediaEntries: 0, total: 0 };
   const skipped: string[] = [];
 
   const mangas = snapshot.mangas ?? [];
@@ -147,26 +136,6 @@ export async function importLocalData(
         .insert(mangas.map((manga) => mangaToRow({ ...manga, id: createId() }, userId)));
       if (error) throw new Error(`Manga aktarılamadı: ${error.message}`);
       imported.mangas = mangas.length;
-    }
-  }
-
-  const foodEntries = snapshot.foodEntries;
-  if (foodEntries.length > 0) {
-    if ((await countRows(client, "food_entries", userId)) > 0) {
-      skipped.push("Kalori");
-    } else {
-      const { error } = await client
-        .from("food_entries")
-        .insert(foodEntries.map((entry) => foodEntryToRow({ ...entry, id: createId() }, userId)));
-      if (error) throw new Error(`Kalori kayıtları aktarılamadı: ${error.message}`);
-      imported.foodEntries = foodEntries.length;
-
-      // Hedefler yalnızca kayıtlarla birlikte taşınır; tek satır olduğu için
-      // upsert yeterli.
-      const { error: targetError } = await client
-        .from("nutrition_targets")
-        .upsert(targetsToRow(snapshot.targets, userId), { onConflict: "user_id" });
-      if (targetError) throw new Error(`Hedefler aktarılamadı: ${targetError.message}`);
     }
   }
 
@@ -185,7 +154,6 @@ export async function importLocalData(
     }
   }
 
-  imported.total = imported.mangas + imported.foodEntries + imported.mediaEntries;
 
   // Atlanan modül varsa yerel veri silinmez: kullanıcı hangi kaydın nerede
   // olduğunu görebilsin, sessizce kaybolmasın.
