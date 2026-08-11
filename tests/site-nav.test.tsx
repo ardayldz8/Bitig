@@ -36,8 +36,17 @@ describe("gezinme menüsü", () => {
     await user.click(screen.getByRole("button", { name: /menüyü aç/i }));
 
     // Alt sekme çubuğu bu kadarını sığdıramadığı için açılır menüye geçildi
-    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
-    for (const ad of ["Ana Sayfa", "Manga", "Dizi / Film", "Repolar", "Notlar", "Abonelikler", "İstatistikler"]) {
+    expect(screen.getAllByRole("menuitem")).toHaveLength(8);
+    for (const ad of [
+      "Ana Sayfa",
+      "Manga",
+      "Dizi / Film",
+      "Repolar",
+      "Notlar",
+      "Kur'an-ı Kerim",
+      "Abonelikler",
+      "İstatistikler",
+    ]) {
       expect(screen.getByRole("menuitem", { name: ad })).toBeInTheDocument();
     }
   });
@@ -74,7 +83,7 @@ describe("gezinme menüsü", () => {
     render(<SiteNav />);
 
     await user.click(screen.getByRole("button", { name: /menüyü aç/i }));
-    expect(screen.getAllByRole("menuitem")).toHaveLength(7);
+    expect(screen.getAllByRole("menuitem")).toHaveLength(8);
 
     await user.keyboard("{Escape}");
     expect(screen.queryByRole("menuitem")).not.toBeInTheDocument();

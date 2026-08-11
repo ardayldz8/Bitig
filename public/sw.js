@@ -11,7 +11,7 @@
 
 // Sürüm artırıldı: yeni push işleyicileri eski worker'da yok, eski sürüm
 // takılı kalırsa bildirimler hiç gelmez.
-const VERSION = "bitig-v6";
+const VERSION = "bitig-v7";
 const SHELL_CACHE = `${VERSION}-shell`;
 
 // Uygulama kabuğu: her sayfanın ihtiyaç duyduğu sabit varlıklar
@@ -21,6 +21,7 @@ const SHELL_ASSETS = [
   "/dizi-film",
   "/repolar",
   "/notlar",
+  "/kuran",
   "/abonelikler",
   "/istatistik",
   "/icon-192.png",

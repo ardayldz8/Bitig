@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BookMarked,
   BookOpen,
   Clapperboard,
   CreditCard,
@@ -21,6 +22,7 @@ const LINKS = [
   { href: "/dizi-film", label: "Dizi / Film", Icon: Clapperboard },
   { href: "/repolar", label: "Repolar", Icon: FolderGit2 },
   { href: "/notlar", label: "Notlar", Icon: NotebookPen },
+  { href: "/kuran", label: "Kur'an-ı Kerim", Icon: BookMarked },
   { href: "/abonelikler", label: "Abonelikler", Icon: CreditCard },
   { href: "/istatistik", label: "İstatistikler", Icon: ChartColumn },
 ] as const;
